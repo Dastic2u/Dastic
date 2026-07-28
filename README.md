@@ -1,1 +1,0 @@
-# nackl-miner
