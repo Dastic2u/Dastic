@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>NacklePick Miner</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0b0f19;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      padding: 24px;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .header .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #111827;
+      border: 1px solid #1f2937;
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      color: #888;
+    }
+    .header .badge strong {
+      color: #00ff88;
+    }
+
+    .miner-scene {
+      height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      margin-bottom: 20px;
+    }
+    .miner {
+      font-size: 5rem;
+      position: relative;
+      transition: transform 0.3s;
+    }
+    .miner.mining {
+      animation: minerBounce 0.6s infinite alternate;
+    }
+    .miner.sleeping {
+      animation: minerSleep 2s infinite ease-in-out;
+    }
+    .pickaxe {
+      font-size: 3rem;
+      position: absolute;
+      right: -20px;
+      top: 10px;
+      transform-origin: bottom left;
+      transition: transform 0.3s;
+    }
+    .miner.mining .pickaxe {
+      animation: swingPickaxe 0.6s infinite alternate;
+    }
+    .sleep-z {
+      position: absolute;
+      right: -30px;
+      top: -10px;
+      font-size: 1.5rem;
+      color: #88aaff;
+      opacity: 0;
+    }
+    .miner.sleeping .sleep-z {
+      animation: floatZ 2s infinite;
+    }
+
+    @keyframes minerBounce {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-8px); }
+    }
+    @keyframes minerSleep {
+      0%, 100% { transform: rotate(-5deg); }
+      50% { transform: rotate(5deg); }
+    }
+    @keyframes swingPickaxe {
+      0% { transform: rotate(-30deg); }
+      100% { transform: rotate(10deg); }
+    }
+    @keyframes floatZ {
+      0% { opacity: 0; transform: translateY(0) translateX(0); }
+      50% { opacity: 1; }
+      100% { opacity: 0; transform: translateY(-30px) translateX(10px); }
+    }
+
+    .particle {
+      position: absolute;
+      font-size: 1.2rem;
+      pointer-events: none;
+      animation: particleFly 1s forwards;
+    }
+    @keyframes particleFly {
+      0% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-60px) scale(0.5); }
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .stat-box {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 14px;
+      text-align: center;
+    }
+    .stat-box .value {
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: #00ff88;
+    }
+    .stat-box .label {
+      font-size: 0.75rem;
+      color: #666;
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .timer-display {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .timer-display .time {
+      font-size: 3.5rem;
+      font-weight: bold;
+      color: #00ff88;
+      font-family: 'Courier New', monospace;
+    }
+    .timer-display .label {
+      color: #666;
+      font-size: 0.85rem;
+      margin-top: 4px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+    .btn {
+      padding: 14px 36px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: bold;
+      transition: all 0.2s;
+    }
+    .btn-start {
+      background: #00ff88;
+      color: #000;
+    }
+    .btn-start:hover {
+      background: #00cc6a;
+    }
+    .btn-stop {
+      background: #ff4444;
+      color: #fff;
+    }
+    .btn-stop:hover {
+      background: #cc3333;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .settings {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .settings h3 {
+      color: #00ff88;
+      font-size: 0.9rem;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 10px 0;
+    }
+    .setting-row label {
+      color: #aaa;
+      font-size: 0.9rem;
+    }
+    .setting-row input, .setting-row select {
+      background: #0b0f19;
+      color: #fff;
+      border: 1px solid #333;
+      padding: 8px 12px;
+      border-radius: 6px;
+      width: 140px;
+      font-size: 0.9rem;
+    }
+    .setting-row input:focus, .setting-row select:focus {
+      outline: none;
+      border-color: #00ff88;
+    }
+    .custom-taps-row {
+      display: none;
+      margin-top: 8px;
+      padding-left: 20px;
+    }
+    .custom-taps-row.show {
+      display: flex;
+    }
+    .custom-taps-row label {
+      color: #888;
+      font-size: 0.85rem;
+    }
+    .custom-taps-row input {
+      width: 100px;
+    }
+
+    .history {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 16px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .history h3 {
+      color: #00ff88;
+      font-size: 0.9rem;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .history h3 button {
+      background: transparent;
+      border: 1px solid #333;
+      color: #666;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.7rem;
+    }
+    .history h3 button:hover {
+      color: #ff4444;
+      border-color: #ff4444;
+    }
+    .history-item {
+      padding: 8px 0;
+      border-bottom: 1px solid #1a2332;
+      font-size: 0.8rem;
+      color: #888;
+      display: flex;
+      justify-content: space-between;
+    }
+    .history-item:last-child {
+      border-bottom: none;
+    }
+    .history-item .time {
+      color: #555;
+    }
+    .history-item .reward {
+      color: #00ff88;
+    }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #0b0f19; }
+    ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="badge">
+      🐝 Mining as <strong id="walletName">wallet</strong>
+    </div>
+  </div>
+
+  <div class="miner-scene" id="minerScene">
+    <div class="miner" id="miner">
+      ⛑️
+      <span class="pickaxe" id="pickaxe">⛏️</span>
+      <span class="sleep-z">Z</span>
+      <span class="sleep-z" style="animation-delay:0.5s; font-size:1rem; right:-40px;">z</span>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-box">
+      <div class="value" id="sessionCount">0</div>
+      <div class="label">Sessions</div>
+    </div>
+    <div class="stat-box">
+      <div class="value" id="tapCount">0</div>
+      <div class="label">Taps</div>
+    </div>
+    <div class="stat-box">
+      <div class="value" id="balanceDisplay">0.0000</div>
+      <div class="label">NACKL</div>
+    </div>
+  </div>
+
+  <div class="timer-display">
+    <div class="time" id="timer">05:30</div>
+    <div class="label" id="timerLabel">Ready to mine</div>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-start" id="startBtn" onclick="startMining()">⛏️ START MINING</button>
+    <button class="btn btn-stop" id="stopBtn" onclick="stopMining()" style="display:none;">⏹ STOP</button>
+  </div>
+
+  <div class="settings">
+    <h3>⚙️ Settings</h3>
+    <div class="setting-row">
+      <label>Session Duration (seconds)</label>
+      <input type="number" id="durationInput" value="330" min="60" max="1800">
+    </div>
+    <div class="setting-row">
+      <label>Taps per Session</label>
+      <select id="tapsPreset" onchange="onTapsChange()">
+        <option value="70">70</option>
+        <option value="80">80</option>
+        <option value="90">90</option>
+        <option value="100">100</option>
+        <option value="custom">Custom</option>
+      </select>
+    </div>
+    <div class="setting-row custom-taps-row" id="customTapsRow">
+      <label>Custom tap count</label>
+      <input type="number" id="customTapsInput" value="70" min="1" max="1000">
+    </div>
+    <div class="setting-row">
+      <label>Auto-Loop</label>
+      <select id="autoLoopInput">
+        <option value="false">Off</option>
+        <option value="true">On</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="history">
+    <h3>
+      📜 Session History
+      <button onclick="clearHistory()">Clear</button>
+    </h3>
+    <div id="historyList"></div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    const params = new URLSearchParams(window.location.search);
+    const WALLET_NAME = params.get('wallet') || 'unknown';
+    document.getElementById('walletName').textContent = WALLET_NAME;
+
+    const STORAGE_KEY = 'nacklepick_miner_' + WALLET_NAME;
+
+    let mining = false;
+    let timerInterval = null;
+    let remaining = 0;
+    let sessionsCompleted = 0;
+    let currentTaps = 0;
+    let totalTaps = 0;
+    let balance = 0;
+    let totalSecondsMined = 0;
+    let nextTapTime = 0;
+    let tapInterval = 0;
+    let maxTaps = 0;
+
+    function onTapsChange() {
+      const preset = document.getElementById('tapsPreset').value;
+      const customRow = document.getElementById('customTapsRow');
+      if (preset === 'custom') {
+        customRow.classList.add('show');
+      } else {
+        customRow.classList.remove('show');
+      }
+    }
+
+    function getMaxTaps() {
+      const preset = document.getElementById('tapsPreset').value;
+      if (preset === 'custom') {
+        return parseInt(document.getElementById('customTapsInput').value) || 70;
+      }
+      return parseInt(preset);
+    }
+
+    function loadData() {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (saved) {
+        sessionsCompleted = saved.sessions || 0;
+        totalTaps = saved.totalTaps || 0;
+        balance = saved.balance || 0;
+        totalSecondsMined = saved.totalSeconds || 0;
+        if (saved.tapsPreset) {
+          document.getElementById('tapsPreset').value = saved.tapsPreset;
+          onTapsChange();
+        }
+        if (saved.customTaps) {
+          document.getElementById('customTapsInput').value = saved.customTaps;
+        }
+        renderHistory(saved.history || []);
+      }
+      updateDisplay();
+    }
+
+    function saveData() {
+      const history = getHistory();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        sessions: sessionsCompleted,
+        totalTaps: totalTaps,
+        balance: balance,
+        totalSeconds: totalSecondsMined,
+        tapsPreset: document.getElementById('tapsPreset').value,
+        customTaps: document.getElementById('customTapsInput').value,
+        history: history
+      }));
+    }
+
+    function getHistory() {
+      const list = document.getElementById('historyList');
+      const items = [];
+      list.querySelectorAll('.history-item').forEach(el => {
+        items.push({
+          time: el.querySelector('.time').textContent,
+          text: el.childNodes[0].textContent.trim(),
+          reward: el.querySelector('.reward')?.textContent || ''
+        });
+      });
+      return items;
+    }
+
+    function renderHistory(items) {
+      const list = document.getElementById('historyList');
+      list.innerHTML = '';
+      items.forEach(item => addHistoryItem(item.text, item.time, item.reward, false));
+    }
+
+    function addHistoryItem(text, timeStr, reward, save = true) {
+      const list = document.getElementById('historyList');
+      const div = document.createElement('div');
+      div.className = 'history-item';
+      const t = timeStr || new Date().toLocaleTimeString();
+      div.innerHTML = `
+        <span>${text}</span>
+        <span>
+          <span class="time">${t}</span>
+          ${reward ? `<span class="reward">${reward}</span>` : ''}
+        </span>
+      `;
+      list.insertBefore(div, list.firstChild);
+      if (save) saveData();
+    }
+
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+    }
+
+    function updateDisplay() {
+      document.getElementById('sessionCount').textContent = sessionsCompleted;
+      document.getElementById('tapCount').textContent = currentTaps;
+      document.getElementById('balanceDisplay').textContent = balance.toFixed(4);
+      document.getElementById('timer').textContent = formatTime(remaining);
+    }
+
+    function sendStatus() {
+      ipcRenderer.send('miner-status', {
+        wallet: WALLET_NAME,
+        isMining: mining,
+        taps: totalTaps + currentTaps,
+        sessions: sessionsCompleted,
+        balance: balance,
+        remaining: remaining
+      });
+    }
+
+    function spawnParticle() {
+      const scene = document.getElementById('minerScene');
+      const particles = ['✨', '💎', '🪙', '⭐'];
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.textContent = particles[Math.floor(Math.random() * particles.length)];
+      p.style.left = (40 + Math.random() * 20) + '%';
+      p.style.top = '50%';
+      scene.appendChild(p);
+      setTimeout(() => p.remove(), 1000);
+    }
+
+    function startMining() {
+      if (mining) return;
+
+      const duration = parseInt(document.getElementById('durationInput').value) || 330;
+      if (duration < 10) {
+        alert('Duration must be at least 10 seconds');
+        return;
+      }
+
+      maxTaps = getMaxTaps();
+      if (maxTaps < 1) {
+        alert('Taps must be at least 1');
+        return;
+      }
+
+      mining = true;
+      remaining = duration;
+      currentTaps = 0;
+
+      tapInterval = duration / maxTaps;
+      nextTapTime = tapInterval;
+
+      document.getElementById('startBtn').style.display = 'none';
+      document.getElementById('stopBtn').style.display = 'inline-block';
+      document.getElementById('timerLabel').textContent = `⛏️ Mining... 0 / ${maxTaps} taps`;
+      document.getElementById('miner').className = 'miner mining';
+      document.getElementById('pickaxe').textContent = '⛏️';
+
+      addHistoryItem(`Session started (${maxTaps} taps)`, null, '');
+      updateDisplay();
+      sendStatus();
+
+      let elapsed = 0;
+
+      timerInterval = setInterval(() => {
+        remaining--;
+        elapsed++;
+        totalSecondsMined++;
+
+        if (elapsed >= nextTapTime && currentTaps < maxTaps) {
+          currentTaps++;
+          nextTapTime += tapInterval;
+          spawnParticle();
+          document.getElementById('timerLabel').textContent =
+            `⛏️ Mining... ${currentTaps} / ${maxTaps} taps`;
+        }
+
+        updateDisplay();
+        sendStatus();
+
+        if (remaining <= 0) {
+          clearInterval(timerInterval);
+          sessionComplete();
+        }
+      }, 1000);
+    }
+
+    function sessionComplete() {
+      sessionsCompleted++;
+      totalTaps += currentTaps;
+
+      const reward = (currentTaps * 0.0001) + (Math.random() * 0.0005);
+      balance += reward;
+
+      addHistoryItem(`Session #${sessionsCompleted} complete (${currentTaps} taps)`, null, `+${reward.toFixed(6)} NACKL`);
+
+      document.getElementById('timerLabel').textContent = `✅ Session complete — ${currentTaps} / ${maxTaps} taps`;
+      document.getElementById('miner').className = 'miner sleeping';
+      document.getElementById('pickaxe').textContent = '💤';
+
+      saveData();
+      updateDisplay();
+      sendStatus();
+
+      const autoLoop = document.getElementById('autoLoopInput').value === 'true';
+      if (autoLoop) {
+        document.getElementById('timerLabel').textContent = '⏳ Auto-restarting...';
+        setTimeout(() => {
+          if (!mining) startMining();
+        }, 3000);
+      } else {
+        resetUI();
+      }
+    }
+
+    function stopMining() {
+      if (!mining) return;
+      mining = false;
+      clearInterval(timerInterval);
+
+      addHistoryItem(`Stopped (${currentTaps}/${maxTaps} taps)`, null, '');
+      saveData();
+
+      resetUI();
+      sendStatus();
+    }
+
+    function resetUI() {
+      document.getElementById('startBtn').style.display = 'inline-block';
+      document.getElementById('stopBtn').style.display = 'none';
+      document.getElementById('timerLabel').textContent = '💤 Idle';
+      document.getElementById('miner').className = 'miner sleeping';
+      document.getElementById('pickaxe').textContent = '💤';
+      remaining = 0;
+      currentTaps = 0;
+      updateDisplay();
+    }
+
+    ipcRenderer.on('command-stop', () => {
+      if (mining) stopMining();
+    });
+
+    loadData();
+    resetUI();
+    sendStatus();
+  </script>
+</body>
+</html>

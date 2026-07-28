@@ -1,0 +1,34 @@
+{
+  "name": "nacklepick-miner",
+  "version": "1.0.0",
+  "description": "NacklePick - Multi-wallet NACKL desktop miner",
+  "main": "launcher.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.nacklepick.miner",
+    "productName": "NacklePick",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NacklePick"
+    }
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron-builder": "^25.0.0",
+    "electron": "^31.0.0"
+  },
+  "author": "martins"
+}
