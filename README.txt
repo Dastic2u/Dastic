@@ -80,7 +80,7 @@ This app is 100% free with unlimited wallets.
 If you find it useful, donations are appreciated:
 
 ☕ Support martins:
-0:2467fee74a56046e9f2607822a6e5134a78657880095dac06b695cc9dc62658c
+martins(ackinacki)
 
 NOTES
 -----
