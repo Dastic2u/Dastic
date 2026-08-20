@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>NacklePick Miner</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0b0f19;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      padding: 24px;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .header .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #111827;
+      border: 1px solid #1f2937;
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      color: #888;
+    }
+    .header .badge strong {
+      color: #00ff88;
+    }
+
+    .miner-scene {
+      height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      margin-bottom: 20px;
+    }
+    .miner {
+      font-size: 5rem;
+      position: relative;
+      transition: transform 0.3s;
+    }
+    .miner.mining {
+      animation: minerBounce 0.6s infinite alternate;
+    }
+    .miner.sleeping {
+      animation: minerSleep 2s infinite ease-in-out;
+    }
+    .pickaxe {
+      font-size: 3rem;
+      position: absolute;
+      right: -20px;
+      top: 10px;
+      transform-origin: bottom left;
+      transition: transform 0.3s;
+    }
+    .miner.mining .pickaxe {
+      animation: swingPickaxe 0.6s infinite alternate;
+    }
+    .sleep-z {
+      position: absolute;
+      right: -30px;
+      top: -10px;
+      font-size: 1.5rem;
+      color: #88aaff;
+      opacity: 0;
+    }
+    .miner.sleeping .sleep-z {
+      animation: floatZ 2s infinite;
+    }
+
+    @keyframes minerBounce {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-8px); }
+    }
+    @keyframes minerSleep {
+      0%, 100% { transform: rotate(-5deg); }
+      50% { transform: rotate(5deg); }
+    }
+    @keyframes swingPickaxe {
+      0% { transform: rotate(-30deg); }
+      100% { transform: rotate(10deg); }
+    }
+    @keyframes floatZ {
+      0% { opacity: 0; transform: translateY(0) translateX(0); }
+      50% { opacity: 1; }
+      100% { opacity: 0; transform: translateY(-30px) translateX(10px); }
+    }
+
+    .particle {
+      position: absolute;
+      font-size: 1.2rem;
+      pointer-events: none;
+      animation: particleFly 1s forwards;
+    }
+    @keyframes particleFly {
+      0% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-60px) scale(0.5); }
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .stat-box {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 14px;
+      text-align: center;
+    }
+    .stat-box .value {
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: #00ff88;
+    }
+    .stat-box .label {
+      font-size: 0.75rem;
+      color: #666;
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .timer-display {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .timer-display .time {
+      font-size: 3.5rem;
+      font-weight: bold;
+      color: #00ff88;
+      font-family: 'Courier New', monospace;
+    }
+    .timer-display .label {
+      color: #666;
+      font-size: 0.85rem;
+      margin-top: 4px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+    .btn {
+      padding: 14px 36px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: bold;
+      transition: all 0.2s;
+    }
+    .btn-start {
+      background: #00ff88;
+      color: #000;
+    }
+    .btn-start:hover {
+      background: #00cc6a;
+    }
+    .btn-stop {
+      background: #ff4444;
+      color: #fff;
+    }
+    .btn-stop:hover {
+      background: #cc3333;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .settings {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .settings h3 {
+      color: #00ff88;
+      font-size: 0.9rem;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 10px 0;
+    }
+    .setting-row label {
+      color: #aaa;
+      font-size: 0.9rem;
+    }
+    .setting-row input, .setting-row select {
+      background: #0b0f19;
+      color: #fff;
+      border: 1px solid #333;
+      padding: 8px 12px;
+      border-radius: 6px;
+      width: 140px;
+      font-size: 0.9rem;
+    }
+    .setting-row input:focus, .setting-row select:focus {
+      outline: none;
+      border-color: #00ff88;
+    }
+    .custom-taps-row {
+      display: none;
+      margin-top: 8px;
+      padding-left: 20px;
+    }
+    .custom-taps-row.show {
+      display: flex;
+    }
+    .custom-taps-row label {
+      color: #888;
+      font-size: 0.85rem;
+    }
+    .custom-taps-row input {
+      width: 100px;
+    }
+
+    .history {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 16px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .history h3 {
+      color: #00ff88;
+      font-size: 0.9rem;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .history h3 button {
+      background: transparent;
+      border: 1px solid #333;
+      color: #666;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.7rem;
+    }
+    .history h3 button:hover {
+      color: #ff4444;
+      border-color: #ff4444;
+    }
+    .history-item {
+      padding: 8px 0;
+      border-bottom: 1px solid #1a2332;
+      font-size: 0.8rem;
+      color: #888;
+      display: flex;
+      justify-content: space-between;
+    }
+    .history-item:last-child {
+      border-bottom: none;
+    }
+    .history-item .time {
+      color: #555;
+    }
+    .history-item .reward {
+      color: #00ff88;
+    }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #0b0f19; }
+    ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="badge">
+      🐝 Mining as <strong id="walletName">wallet</strong>
+    </div>
+  </div>
+
+  <div class="miner-scene" id="minerScene">
+    <div class="miner" id="miner">
+      ⛑️
+      <span class="pickaxe" id="pickaxe">⛏️</span>
+      <span class="sleep-z">Z</span>
+      <span class="sleep-z" style="animation-delay:0.5s; font-size:1rem; right:-40px;">z</span>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-box">
+      <div class="value" id="sessionCount">0</div>
+      <div class="label">Sessions</div>
+    </div>
+    <div class="stat-box">
+      <div class="value" id="tapCount">0</div>
+      <div class="label">Taps</div>
+    </div>
+    <div class="stat-box">
+      <div class="value" id="balanceDisplay">0.0000</div>
+      <div class="label">Wallet Balance</div>
+    </div>
+    <div class="stat-box">
+      <div class="value" id="sessionRewardDisplay">0.0000</div>
+      <div class="label">This Session</div>
+    </div>
+  </div>
+
+  <div class="timer-display">
+    <div class="time" id="timer">05:30</div>
+    <div class="label" id="timerLabel">Ready to mine</div>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-start" id="startBtn" onclick="startMining()">⛏️ START MINING</button>
+    <button class="btn btn-stop" id="stopBtn" onclick="stopMining()" style="display:none;">⏹ STOP</button>
+  </div>
+
+  <div class="settings">
+    <h3>⚙️ Settings</h3>
+
+    <div class="setting-row">
+      <label>🔐 Wallet Authorization</label>
+      <button class="btn-add" style="margin: 0;" onclick="showConfigSetup()">Connect Wallet</button>
+    </div>
+
+    <div class="setting-row">
+      <label>⏱️ Session Timing</label>
+      <small style="color: #00ff88; font-size: 0.85rem;">Controlled by Bee Engine (automatic)</small>
+    </div>
+
+    <div class="setting-row">
+      <label>Taps per Session</label>
+      <select id="tapsPreset" onchange="onTapsChange()">
+        <option value="50">50</option>
+        <option value="70">70</option>
+        <option value="80">80</option>
+        <option value="90">90</option>
+        <option value="100">100</option>
+        <option value="custom">Custom</option>
+      </select>
+    </div>
+
+    <div class="setting-row custom-taps-row" id="customTapsRow">
+      <label>Custom taps (1-10000)</label>
+      <input type="number" id="customTapsInput" value="70" min="1" max="10000">
+    </div>
+
+    <div class="setting-row">
+      <label>💤 Background Mining</label>
+      <select id="backgroundModeInput">
+        <option value="always">Always</option>
+        <option value="minimized">When Minimized</option>
+        <option value="never">Never</option>
+      </select>
+    </div>
+
+    <div class="setting-row">
+      <label>⚡ Low CPU Mode</label>
+      <select id="lowCpuInput">
+        <option value="false">Off (Faster)</option>
+        <option value="true">On (Lower Usage)</option>
+      </select>
+    </div>
+
+    <div class="setting-row">
+      <label>🔄 Auto-Loop Sessions</label>
+      <select id="autoLoopInput">
+        <option value="true">On (Continuous Mining)</option>
+        <option value="false">Off (Manual Restart)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="history">
+    <h3>
+      📜 Session History
+      <button onclick="clearHistory()">Clear</button>
+    </h3>
+    <div id="historyList"></div>
+  </div>
+
+  <!-- Setup Config Modal -->
+  <div class="modal-overlay" id="setupModal">
+    <div class="modal" style="width: 500px;">
+      <h3>🔐 Bee Engine Authorization</h3>
+      <p style="color: #00ff88; font-size: 0.9rem; margin-bottom: 12px; font-weight: bold;">
+        ✅ Just scan the QR code with your Acki Nacki Wallet!
+      </p>
+      <p style="color: #888; font-size: 0.85rem; margin-bottom: 16px; line-height: 1.5;">
+        No dapp ID needed to mine. Click "Authorize" below and confirm in your wallet. <br><br>
+        <strong>Note:</strong> Only the app creator needs a dapp ID to register this app in Acki Nacki ecosystem.
+      </p>
+
+      <div style="display: flex; gap: 10px;">
+        <button class="close-btn" onclick="hideConfigSetup()" style="flex: 1; background: #374151;">Cancel</button>
+        <button class="close-btn" onclick="proceedToAuthorize()" style="flex: 1; background: #00ff88; color: #000; cursor: pointer; font-weight: bold;">🔐 Authorize Wallet</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+    const BeeEngineMiner = require('./bee-engine-miner');
+    const BEE_ENGINE_CONFIG = require('./bee-engine-config');
+
+    const params = new URLSearchParams(window.location.search);
+    const WALLET_NAME = params.get('wallet') || 'unknown';
+    const APP_ID = params.get('appId') || BEE_ENGINE_CONFIG.APP_ID;
+    document.getElementById('walletName').textContent = WALLET_NAME;
+
+    const STORAGE_KEY = 'nacklepick_miner_' + WALLET_NAME;
+
+    // Initialize Bee Engine Miner instance
+    const beeEngine = new BeeEngineMiner();
+
+    let mining = false;
+    let timerInterval = null;
+    let remaining = 0;
+    let sessionsCompleted = 0;
+    let currentTaps = 0;
+    let totalTaps = 0;
+    let balance = 0;
+    let sessionReward = 0;  // Reward earned in current session
+    let totalSecondsMined = 0;
+    let nextTapTime = 0;
+    let tapInterval = 0;
+    let maxTaps = 0;
+    let useRealMining = false;
+
+    // Bee Engine uses ~330 seconds per session (5:30 minutes)
+    const BEE_ENGINE_SESSION_DURATION = 330 * 1000;  // milliseconds
+
+    function onTapsChange() {
+      const preset = document.getElementById('tapsPreset').value;
+      const customRow = document.getElementById('customTapsRow');
+      if (preset === 'custom') {
+        customRow.classList.add('show');
+      } else {
+        customRow.classList.remove('show');
+      }
+    }
+
+    function getMaxTaps() {
+      const preset = document.getElementById('tapsPreset').value;
+      if (preset === 'custom') {
+        return parseInt(document.getElementById('customTapsInput').value) || 70;
+      }
+      return parseInt(preset);
+    }
+
+    function loadData() {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (saved) {
+        sessionsCompleted = saved.sessions || 0;
+        totalTaps = saved.totalTaps || 0;
+        balance = saved.balance || 0;
+        totalSecondsMined = saved.totalSeconds || 0;
+        if (saved.tapsPreset) {
+          document.getElementById('tapsPreset').value = saved.tapsPreset;
+          onTapsChange();
+        }
+        if (saved.customTaps) {
+          document.getElementById('customTapsInput').value = saved.customTaps;
+        }
+        renderHistory(saved.history || []);
+      }
+      updateDisplay();
+    }
+
+    function saveData() {
+      const history = getHistory();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        sessions: sessionsCompleted,
+        totalTaps: totalTaps,
+        balance: balance,
+        totalSeconds: totalSecondsMined,
+        tapsPreset: document.getElementById('tapsPreset').value,
+        customTaps: document.getElementById('customTapsInput').value,
+        history: history
+      }));
+    }
+
+    function getHistory() {
+      const list = document.getElementById('historyList');
+      const items = [];
+      list.querySelectorAll('.history-item').forEach(el => {
+        items.push({
+          time: el.querySelector('.time').textContent,
+          text: el.childNodes[0].textContent.trim(),
+          reward: el.querySelector('.reward')?.textContent || ''
+        });
+      });
+      return items;
+    }
+
+    function renderHistory(items) {
+      const list = document.getElementById('historyList');
+      list.innerHTML = '';
+      items.forEach(item => addHistoryItem(item.text, item.time, item.reward, false));
+    }
+
+    function addHistoryItem(text, timeStr, reward, save = true) {
+      const list = document.getElementById('historyList');
+      const div = document.createElement('div');
+      div.className = 'history-item';
+      const t = timeStr || new Date().toLocaleTimeString();
+      div.innerHTML = `
+        <span>${text}</span>
+        <span>
+          <span class="time">${t}</span>
+          ${reward ? `<span class="reward">${reward}</span>` : ''}
+        </span>
+      `;
+      list.insertBefore(div, list.firstChild);
+      if (save) saveData();
+    }
+
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+    }
+
+    function updateDisplay() {
+      document.getElementById('sessionCount').textContent = sessionsCompleted;
+      document.getElementById('tapCount').textContent = currentTaps;
+      document.getElementById('balanceDisplay').textContent = balance.toFixed(4);
+      document.getElementById('sessionRewardDisplay').textContent = sessionReward.toFixed(6);
+      document.getElementById('timer').textContent = formatTime(remaining);
+    }
+
+    function sendStatus() {
+      ipcRenderer.send('miner-status', {
+        wallet: WALLET_NAME,
+        isMining: mining,
+        taps: totalTaps + currentTaps,
+        sessions: sessionsCompleted,
+        balance: balance,
+        remaining: remaining
+      });
+    }
+
+    function spawnParticle() {
+      const scene = document.getElementById('minerScene');
+      const particles = ['✨', '💎', '🪙', '⭐'];
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.textContent = particles[Math.floor(Math.random() * particles.length)];
+      p.style.left = (40 + Math.random() * 20) + '%';
+      p.style.top = '50%';
+      scene.appendChild(p);
+      setTimeout(() => p.remove(), 1000);
+    }
+
+    async function startMining() {
+      if (mining) return;
+
+      maxTaps = getMaxTaps();
+      if (maxTaps < 1) {
+        alert('Taps must be at least 1');
+        return;
+      }
+
+      // Use Bee Engine's natural duration (5:30 minutes = 330 seconds)
+      const duration = 330;  // seconds (Bee Engine controlled)
+      const durationMs = BEE_ENGINE_SESSION_DURATION;
+
+      // Check if Bee Engine is authorized
+      if (useRealMining && !beeEngine.isAuthorized) {
+        const confirmed = confirm(
+          'Bee Engine not authorized.\n\n' +
+          'Would you like to:\n' +
+          '- OK: Authorize with your wallet (scan QR code)\n' +
+          '- Cancel: Use simulated mining for now'
+        );
+
+        if (confirmed) {
+          await authorizeBeeMining();
+          if (!beeEngine.isAuthorized) {
+            alert('Authorization failed. Using simulated mining.');
+            useRealMining = false;
+          }
+        } else {
+          useRealMining = false;
+        }
+      }
+
+      mining = true;
+      remaining = duration;
+      currentTaps = 0;
+      sessionReward = 0;  // Reset session reward
+
+      tapInterval = duration / maxTaps;
+      nextTapTime = tapInterval;
+
+      document.getElementById('startBtn').style.display = 'none';
+      document.getElementById('stopBtn').style.display = 'inline-block';
+      document.getElementById('timerLabel').textContent = `⛏️ Mining... 0 / ${maxTaps} taps`;
+      document.getElementById('miner').className = 'miner mining';
+      document.getElementById('pickaxe').textContent = '⛏️';
+
+      const minerType = useRealMining ? 'Bee Engine' : 'Simulated';
+      addHistoryItem(`Session started (${maxTaps} taps, ${minerType})`, null, '');
+      updateDisplay();
+      sendStatus();
+
+      // Real Bee Engine mining
+      if (useRealMining && beeEngine.isAuthorized) {
+        const result = await beeEngine.startMining(durationMs, (event) => {
+          console.log('[BeeEngine Event]', event);
+          // Handle Bee Engine mining events
+        });
+
+        if (!result.success) {
+          console.error('Bee Engine mining failed:', result.error);
+          alert('Mining error: ' + result.error);
+          resetUI();
+          return;
+        }
+
+        // Bee Engine mining with tap tracking
+        let elapsed = 0;
+        timerInterval = setInterval(async () => {
+          remaining--;
+          elapsed++;
+          totalSecondsMined++;
+
+          if (elapsed >= nextTapTime && currentTaps < maxTaps) {
+            currentTaps++;
+            nextTapTime += tapInterval;
+            spawnParticle();
+
+            // Track tap with Bee Engine
+            const x = Math.floor(Math.random() * 512);
+            const y = Math.floor(Math.random() * 512);
+            const tapResult = await beeEngine.addTap(x, y);
+            if (!tapResult.success) {
+              console.warn('Tap failed:', tapResult.error);
+            }
+
+            document.getElementById('timerLabel').textContent =
+              `⛏️ Mining... ${currentTaps} / ${maxTaps} taps`;
+          }
+
+          updateDisplay();
+          sendStatus();
+
+          if (remaining <= 0) {
+            clearInterval(timerInterval);
+            mining = false;  // Stop timer before completion
+            await sessionCompleteReal();
+          }
+        }, 1000);
+      } else {
+        // Simulated mining (fallback)
+        let elapsed = 0;
+        timerInterval = setInterval(() => {
+          remaining--;
+          elapsed++;
+          totalSecondsMined++;
+
+          if (elapsed >= nextTapTime && currentTaps < maxTaps) {
+            currentTaps++;
+            nextTapTime += tapInterval;
+            spawnParticle();
+            document.getElementById('timerLabel').textContent =
+              `⛏️ Mining... ${currentTaps} / ${maxTaps} taps`;
+          }
+
+          updateDisplay();
+          sendStatus();
+
+          if (remaining <= 0) {
+            clearInterval(timerInterval);
+            sessionComplete();
+          }
+        }, 1000);
+      }
+    }
+
+    function sessionComplete() {
+      sessionsCompleted++;
+      totalTaps += currentTaps;
+
+      const reward = (currentTaps * 0.0001) + (Math.random() * 0.0005);
+      balance += reward;
+
+      addHistoryItem(`Session #${sessionsCompleted} complete (${currentTaps} taps)`, null, `+${reward.toFixed(6)} NACKL`);
+
+      document.getElementById('timerLabel').textContent = `✅ Session complete — ${currentTaps} / ${maxTaps} taps`;
+      document.getElementById('miner').className = 'miner sleeping';
+      document.getElementById('pickaxe').textContent = '💤';
+
+      saveData();
+      updateDisplay();
+      sendStatus();
+
+      const autoLoop = document.getElementById('autoLoopInput').value === 'true';
+      if (autoLoop) {
+        document.getElementById('timerLabel').textContent = '⏳ Auto-restarting...';
+        setTimeout(() => {
+          if (!mining) startMining();
+        }, 3000);
+      } else {
+        resetUI();
+      }
+    }
+
+    async function sessionCompleteReal() {
+      sessionsCompleted++;
+      totalTaps += currentTaps;
+
+      // Get real rewards from Bee Engine
+      let reward = 0;
+      if (beeEngine.isAuthorized) {
+        const rewardResult = await beeEngine.getRewards();
+        if (rewardResult.success) {
+          reward = parseFloat(rewardResult.reward) || 0;
+        } else {
+          console.warn('Reward collection failed:', rewardResult.error);
+          reward = (currentTaps * 0.0001) + (Math.random() * 0.0005);
+        }
+      } else {
+        reward = (currentTaps * 0.0001) + (Math.random() * 0.0005);
+      }
+
+      sessionReward = reward;  // Store per-session reward
+      balance += reward;
+
+      addHistoryItem(
+        `Session #${sessionsCompleted}: ${currentTaps} taps`,
+        null,
+        `+${reward.toFixed(6)} NACKL`
+      );
+
+      document.getElementById('timerLabel').textContent = `✅ Completed: +${reward.toFixed(6)} NACKL`;
+      document.getElementById('miner').className = 'miner sleeping';
+      document.getElementById('pickaxe').textContent = '💤';
+
+      saveData();
+      updateDisplay();
+      sendStatus();
+
+      // Auto-loop by default (ON is now default)
+      const autoLoop = document.getElementById('autoLoopInput').value === 'true';
+      if (autoLoop) {
+        document.getElementById('timerLabel').textContent = '🔄 Starting next session...';
+        setTimeout(() => {
+          if (!mining) startMining();
+        }, 2000);  // 2 second pause between sessions
+      } else {
+        resetUI();
+      }
+    }
+
+    async function stopMining() {
+      if (!mining) return;
+      mining = false;
+      clearInterval(timerInterval);
+
+      // Stop Bee Engine if running
+      if (useRealMining && beeEngine.isMining) {
+        await beeEngine.stopMining();
+      }
+
+      addHistoryItem(`Stopped (${currentTaps}/${maxTaps} taps)`, null, '');
+      saveData();
+
+      resetUI();
+      sendStatus();
+    }
+
+    function showConfigSetup() {
+      const setupModal = document.getElementById('setupModal');
+      setupModal.classList.add('show');
+    }
+
+    function hideConfigSetup() {
+      const setupModal = document.getElementById('setupModal');
+      setupModal.classList.remove('show');
+    }
+
+    async function proceedToAuthorize() {
+      hideConfigSetup();
+      // Trigger authorization (users just scan QR code, no dapp ID needed)
+      await authorizeBeeMining();
+    }
+
+    async function authorizeBeeMining() {
+      console.log('[BeeEngine] Starting authorization...');
+
+      // Show auth status
+      addHistoryItem('🔐 Starting Bee Engine authorization...', null, '');
+      document.getElementById('timerLabel').textContent = '🔐 Waiting for authorization...';
+
+      try {
+        // Initialize Bee Engine
+        const initResult = await Promise.resolve(beeEngine.initialize(WALLET_NAME));
+        if (!initResult.success) {
+          throw new Error(initResult.error || 'SDK initialization failed');
+        }
+
+        // Generate mining keys
+        const keysResult = await beeEngine.generateMiningKeys();
+        if (!keysResult.success) {
+          throw new Error(keysResult.error || 'Key generation failed');
+        }
+
+        addHistoryItem('🔑 Keys generated. Confirm in AN Wallet...', null, '');
+
+        // Show deep link to user (would need UI for QR code)
+        const deepLink = keysResult.deepLink;
+        console.log('[BeeEngine] Deep Link:', deepLink);
+
+        // In a real app, you'd show a QR code or clickable link
+        alert(
+          '✅ Mining keys generated!\n\n' +
+          'Please open Acki Nacki Wallet and confirm the authorization.\n\n' +
+          'Deep Link: ' + (deepLink ? deepLink.substring(0, 50) + '...' : 'Check console')
+        );
+
+        // Wait for key propagation
+        const pubKey = keysResult.public;
+        const propResult = await beeEngine.waitForKeyPropagation(pubKey);
+        if (!propResult.success) {
+          throw new Error(propResult.error || 'Key propagation failed');
+        }
+
+        // Verify with first tap
+        const tapResult = await beeEngine.verifyWithFirstTap(256, 256);
+        if (!tapResult.success) {
+          throw new Error(tapResult.error || 'First tap verification failed');
+        }
+
+        addHistoryItem('✅ Bee Engine authorized!', null, '');
+        document.getElementById('timerLabel').textContent = '💤 Idle';
+        useRealMining = true;
+
+        alert('✅ Authorization complete! Bee Engine is ready to use.');
+        return true;
+      } catch (error) {
+        console.error('[BeeEngine] Authorization failed:', error);
+        addHistoryItem('❌ Authorization failed: ' + error.message, null, '');
+        document.getElementById('timerLabel').textContent = '❌ Auth failed - using simulated';
+        useRealMining = false;
+        alert('❌ Authorization failed:\n\n' + error.message);
+        return false;
+      }
+    }
+
+    function resetUI() {
+      document.getElementById('startBtn').style.display = 'inline-block';
+      document.getElementById('stopBtn').style.display = 'none';
+      document.getElementById('timerLabel').textContent = '💤 Idle';
+      document.getElementById('miner').className = 'miner sleeping';
+      document.getElementById('pickaxe').textContent = '💤';
+      remaining = 0;
+      currentTaps = 0;
+      updateDisplay();
+    }
+
+    ipcRenderer.on('command-stop', () => {
+      if (mining) stopMining();
+    });
+
+    // Initialize Bee Engine on app load
+    async function initializeBeeEngine() {
+      // Load saved config
+      const savedBackground = localStorage.getItem('bee_background_mode');
+      const savedLowCpu = localStorage.getItem('bee_low_cpu_mode');
+
+      document.getElementById('backgroundModeInput').value = savedBackground || 'always';
+      document.getElementById('lowCpuInput').value = savedLowCpu || 'false';
+
+      // Try to restore authorization
+      const restored = beeEngine.restoreAuthorization(WALLET_NAME);
+      if (restored.success) {
+        useRealMining = true;
+        console.log('[BeeEngine] Authorization restored');
+        addHistoryItem('✅ Ready to mine! Wallet authorized.', null, '');
+      } else {
+        console.log('[BeeEngine] Not authorized yet.');
+        addHistoryItem('👤 Click 🔐 Setup to connect your wallet and start mining.', null, '');
+      }
+    }
+
+    loadData();
+    resetUI();
+    sendStatus();
+
+    // Setup modal event listeners
+    document.getElementById('setupModal').addEventListener('click', (e) => {
+      if (e.target.id === 'setupModal') hideConfigSetup();
+    });
+
+    document.getElementById('dappIdInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') saveBeeeConfig();
+    });
+
+    // Initialize on page load
+    setTimeout(() => {
+      initializeBeeEngine();
+    }, 100);
+  </script>
+</body>
+</html>

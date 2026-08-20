@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build output
+dist/
+*.exe
+*.msi
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# User data
+*.log
+*.pid
+*.seed
+.eslintcache
+
+# Temporary files
+~*
+*.tmp
+*.bak
+
+# User configuration
+bee_engine.config.json

@@ -1,0 +1,33 @@
+{
+  "name": "nacklepick-miner",
+  "version": "1.0.0",
+  "description": "NacklePick - Multi-wallet NACKL desktop miner with Bee Engine",
+  "main": "launcher.js",
+  "author": "NacklePick Miner",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.nacklepick.miner",
+    "productName": "NacklePick",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "@teamgosh/bee-sdk": "latest"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}

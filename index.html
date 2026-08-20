@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>NacklePick Launcher</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0b0f19;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo {
+      font-size: 2rem;
+    }
+    .header h1 {
+      color: #00ff88;
+      font-size: 1.6rem;
+    }
+    .header p {
+      color: #666;
+      font-size: 0.85rem;
+    }
+    .donate-btn {
+      background: #1a2332;
+      color: #ffaa00;
+      border: 1px solid #ffaa0044;
+      padding: 10px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+    .donate-btn:hover {
+      background: #ffaa0011;
+      border-color: #ffaa0088;
+    }
+
+    .wallet-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .wallet-card {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 14px;
+      padding: 18px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: border-color 0.2s;
+    }
+    .wallet-card:hover {
+      border-color: #00ff8844;
+    }
+    .wallet-card.mining {
+      border-color: #00ff8866;
+      background: #0f1f17;
+    }
+
+    .wallet-info {
+      flex: 1;
+    }
+    .wallet-name {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .wallet-name .avatar {
+      font-size: 1.4rem;
+    }
+    .wallet-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: #888;
+      margin-bottom: 8px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #444;
+    }
+    .status-dot.mining {
+      background: #00ff88;
+      box-shadow: 0 0 6px #00ff88;
+    }
+    .wallet-stats {
+      display: flex;
+      gap: 16px;
+      font-size: 0.85rem;
+      color: #aaa;
+    }
+    .wallet-stats span {
+      color: #00ff88;
+      font-weight: 600;
+    }
+    .wallet-balance {
+      color: #00ff88 !important;
+      font-size: 0.95rem;
+    }
+
+    .wallet-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .btn {
+      padding: 10px 22px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-launch {
+      background: #00ff88;
+      color: #000;
+    }
+    .btn-launch:hover {
+      background: #00cc6a;
+    }
+    .btn-stop {
+      background: #ff4444;
+      color: #fff;
+    }
+    .btn-stop:hover {
+      background: #cc3333;
+    }
+    .btn-delete {
+      background: transparent;
+      color: #666;
+      border: 1px solid #333;
+      padding: 10px 14px;
+      font-size: 1rem;
+    }
+    .btn-delete:hover {
+      color: #ff4444;
+      border-color: #ff4444;
+    }
+    .btn-hidden {
+      display: none !important;
+    }
+
+    .add-wallet {
+      margin-top: 18px;
+      display: flex;
+      gap: 10px;
+    }
+    .add-wallet input {
+      flex: 1;
+      background: #111827;
+      border: 1px solid #1f2937;
+      color: #fff;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 1rem;
+    }
+    .add-wallet input:focus {
+      outline: none;
+      border-color: #00ff88;
+    }
+    .btn-add {
+      background: #1a2332;
+      color: #00ff88;
+      border: 1px solid #00ff8844;
+      padding: 12px 20px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-add:hover {
+      background: #00ff8811;
+    }
+
+    .locked-msg {
+      text-align: center;
+      color: #666;
+      padding: 20px;
+      font-size: 0.9rem;
+    }
+    .locked-msg a {
+      color: #00ff88;
+      cursor: pointer;
+    }
+
+    /* Donation Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.8);
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-overlay.show {
+      display: flex;
+    }
+    .modal {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 16px;
+      padding: 28px;
+      width: 420px;
+      max-width: 90%;
+    }
+    .modal h3 {
+      color: #ffaa00;
+      margin-bottom: 12px;
+      font-size: 1.2rem;
+    }
+    .modal p {
+      color: #aaa;
+      font-size: 0.9rem;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+    .wallet-address {
+      background: #0b0f19;
+      border: 1px solid #1f2937;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #00ff88;
+      word-break: break-all;
+      cursor: pointer;
+      margin-bottom: 12px;
+    }
+    .wallet-address:hover {
+      border-color: #00ff88;
+    }
+    .modal .close-btn {
+      background: #1f2937;
+      color: #fff;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+    }
+    .modal .close-btn:hover {
+      background: #374151;
+    }
+    .copied {
+      color: #00ff88;
+      font-size: 0.8rem;
+      text-align: center;
+      margin-bottom: 8px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .copied.show {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <div class="logo">🐝</div>
+      <div>
+        <h1>NacklePick</h1>
+        <p>Multi-wallet NACKL miner</p>
+      </div>
+    </div>
+    <button class="donate-btn" onclick="showDonate()">☕ Buy martins a coffee</button>
+  </div>
+
+  <div class="wallet-list" id="walletList"></div>
+
+  <div class="add-wallet" id="addWalletSection">
+    <input type="text" id="newWalletName" placeholder="Enter wallet name..." maxlength="20">
+    <button class="btn-add" onclick="addWallet()">+ Add Wallet</button>
+  </div>
+
+  <div class="locked-msg" id="lockedMsg" style="display:none;">
+    🔒 Maximum 2 free wallets reached.<br>
+    <a onclick="showDonate()">Pay 50 NACKL to unlock unlimited wallets</a>
+  </div>
+
+  <!-- Donation Modal -->
+  <div class="modal-overlay" id="donateModal">
+    <div class="modal">
+      <h3>☕ Buy martins a coffee</h3>
+      <p>Support development by sending NACKL to the address below. Click to copy.</p>
+      <div class="copied" id="copiedText">✓ Copied to clipboard!</div>
+      <div class="wallet-address" onclick="copyAddress()">
+        martins
+      </div>
+      <button class="close-btn" onclick="hideDonate()">Close</button>
+    </div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+    const STORAGE_KEY = 'nacklepick_wallets';
+    const MAX_FREE_WALLETS = 2;
+
+    // Default wallet
+    let wallets = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [
+      { name: 'martins', sessions: 0, taps: 0, balance: 0, isMining: false, history: [] }
+    ];
+
+    function saveWallets() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(wallets));
+    }
+
+    function renderWallets() {
+      const list = document.getElementById('walletList');
+      list.innerHTML = '';
+
+      wallets.forEach(wallet => {
+        const card = document.createElement('div');
+        card.className = 'wallet-card' + (wallet.isMining ? ' mining' : '');
+        card.id = 'card-' + wallet.name;
+
+        const statusText = wallet.isMining ? '⛏️ Mining' : '💤 Idle';
+        const stopHidden = wallet.isMining ? '' : 'btn-hidden';
+
+        card.innerHTML = `
+          <div class="wallet-info">
+            <div class="wallet-name">
+              <span class="avatar">👤</span>
+              ${wallet.name}
+            </div>
+            <div class="wallet-status">
+              <span class="status-dot ${wallet.isMining ? 'mining' : ''}"></span>
+              ${statusText}
+            </div>
+            <div class="wallet-stats">
+              <div>Sessions: <span>${wallet.sessions}</span></div>
+              <div>Taps: <span>${wallet.taps}</span></div>
+              <div class="wallet-balance">${wallet.balance.toFixed(4)} NACKL</div>
+            </div>
+          </div>
+          <div class="wallet-actions">
+            <button class="btn btn-launch" onclick="launchWallet('${wallet.name}')">⛏️ Launch</button>
+            <button class="btn btn-stop ${stopHidden}" id="stop-${wallet.name}" onclick="stopWallet('${wallet.name}')">⏹ Stop</button>
+            <button class="btn btn-delete" onclick="deleteWallet('${wallet.name}')">🗑️</button>
+          </div>
+        `;
+        list.appendChild(card);
+      });
+
+      // Show/hide add wallet section
+      const canAdd = wallets.length < MAX_FREE_WALLETS;
+      document.getElementById('addWalletSection').style.display = canAdd ? 'flex' : 'none';
+      document.getElementById('lockedMsg').style.display = canAdd ? 'none' : 'block';
+    }
+
+    function launchWallet(name) {
+      ipcRenderer.send('open-miner', name);
+    }
+
+    function stopWallet(name) {
+      ipcRenderer.send('stop-miner', name);
+      // Optimistically update UI
+      const w = wallets.find(w => w.name === name);
+      if (w) {
+        w.isMining = false;
+        saveWallets();
+        renderWallets();
+      }
+    }
+
+    function deleteWallet(name) {
+      if (!confirm(`Delete wallet "${name}"? This cannot be undone.`)) return;
+      wallets = wallets.filter(w => w.name !== name);
+      saveWallets();
+      renderWallets();
+    }
+
+    function addWallet() {
+      const input = document.getElementById('newWalletName');
+      const name = input.value.trim().toLowerCase();
+      if (!name) return;
+      if (wallets.find(w => w.name === name)) {
+        alert('Wallet name already exists');
+        return;
+      }
+      if (wallets.length >= MAX_FREE_WALLETS) {
+        alert('Maximum 2 free wallets. Pay to unlock more.');
+        return;
+      }
+      wallets.push({ name, sessions: 0, taps: 0, balance: 0, isMining: false, history: [] });
+      saveWallets();
+      input.value = '';
+      renderWallets();
+    }
+
+    // Receive live updates from miner windows
+    ipcRenderer.on('wallet-update', (event, data) => {
+      const { wallet, isMining, taps, sessions, balance } = data;
+      const w = wallets.find(w => w.name === wallet);
+      if (w) {
+        w.isMining = isMining;
+        w.taps = taps;
+        w.sessions = sessions;
+        w.balance = balance;
+        saveWallets();
+        renderWallets();
+      }
+    });
+
+    // Donation modal
+    function showDonate() {
+      document.getElementById('donateModal').classList.add('show');
+    }
+    function hideDonate() {
+      document.getElementById('donateModal').classList.remove('show');
+      document.getElementById('copiedText').classList.remove('show');
+    }
+    function copyAddress() {
+      const addr = '0:2467fee74a56046e9f2607822a6e5134a78657880095dac06b695cc9dc62658c';
+      navigator.clipboard.writeText(addr).then(() => {
+        document.getElementById('copiedText').classList.add('show');
+        setTimeout(() => document.getElementById('copiedText').classList.remove('show'), 2000);
+      });
+    }
+
+    // Close modal on overlay click
+    document.getElementById('donateModal').addEventListener('click', (e) => {
+      if (e.target.id === 'donateModal') hideDonate();
+    });
+
+    // Enter key to add wallet
+    document.getElementById('newWalletName').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') addWallet();
+    });
+
+    // Initial render
+    renderWallets();
+  </script>
+</body>
+</html>
