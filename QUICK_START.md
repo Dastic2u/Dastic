@@ -34,7 +34,7 @@ Get it from one of these:
 Contact: https://t.me/EugeneDAO
 
 Provide:
-- App name: "NacklePick Miner"  
+- App name: "Dastic Miner"  
 - App link: (your GitHub/website)
 - Logo (as WebP, use https://squoosh.app/)
 

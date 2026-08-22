@@ -24,7 +24,7 @@ You (Creator)
 Contact Acki Nacki team: https://t.me/EugeneDAO
   ↓
 Provide:
-├─ App name: "NacklePick Miner"
+├─ App name: "Dastic Miner"
 ├─ App link: Your GitHub/website
 └─ Logo: In WebP format
   ↓
@@ -52,9 +52,9 @@ DONE! App is ready for public
 ### USER WORKFLOW (For Each User)
 
 ```
-User downloads NacklePick from GitHub
+User downloads Dastic from GitHub
   ↓
-Runs: NacklePick Setup 1.0.0.exe
+Runs: Dastic Setup 1.0.0.exe
   ↓
 Opens app
   ↓
@@ -106,7 +106,7 @@ User earns NACKL continuously! 💰
 
 ### Before Clicking "Setup"
 ```
-👤 NacklePick Miner
+👤 Dastic Miner
 ⛏️ Mining as: wallet_name
 
 Mining Status:
@@ -133,7 +133,7 @@ Settings:
 ### After Clicking "Connect Wallet" and Scanning QR
 
 ```
-✅ NacklePick Miner
+✅ Dastic Miner
 ⛏️ Mining as: wallet_name
 
 Mining Status:
@@ -160,7 +160,7 @@ Settings:
 ### During Mining Session
 
 ```
-⛏️ NacklePick Miner
+⛏️ Dastic Miner
 ⛏️ Mining as: wallet_name
 
 Mining Status:
@@ -182,7 +182,7 @@ Session History:
 ### Session Completes
 
 ```
-✅ NacklePick Miner
+✅ Dastic Miner
 ⛏️ Mining as: wallet_name
 
 Mining Status:
@@ -226,7 +226,7 @@ Session History:
 - Submits results to smart contract
 - Calculates and pays rewards
 
-### **NacklePick App** 🐝⛏️
+### **Dastic App** 🐝⛏️
 - Manages wallet authorization (QR code)
 - Tracks session progress (UI timer)
 - Shows balance and earnings
@@ -254,12 +254,12 @@ Session History:
 ```
 Day 1:
 
-10:00 AM - User downloads NacklePick
+10:00 AM - User downloads Dastic
            Size: ~150 MB
            From: GitHub Releases
 
 10:05 AM - User installs
-           Click: NacklePick Setup 1.0.0.exe
+           Click: Dastic Setup 1.0.0.exe
            Next → Next → Finish
 
 10:10 AM - App opens for first time
@@ -270,7 +270,7 @@ Day 1:
            QR code modal appears
 
 10:13 AM - User scans with Acki Nacki Wallet
-           Wallet prompts: "Connect to NacklePick?"
+           Wallet prompts: "Connect to Dastic?"
            User confirms
 
 10:14 AM - Wallet confirms authorization
@@ -319,7 +319,7 @@ Day 1:
 User goes to:
 https://github.com/YOUR_USERNAME/nacklepick-miner/releases
 
-Clicks: "NacklePick Setup 1.0.0.exe"
+Clicks: "Dastic Setup 1.0.0.exe"
 Size: 150 MB
 ```
 

@@ -17,7 +17,7 @@ APP CREATOR (You):
 └─ Shares with public
 
 REGULAR USERS:
-├─ Download NacklePick miner
+├─ Download Dastic miner
 ├─ Click "🔐 Authorize Wallet"
 ├─ Scan QR code with Acki Nacki Wallet
 ├─ Confirm authorization
@@ -41,7 +41,7 @@ You:
 ```
 User:
   Download installer
-  Run NacklePick
+  Run Dastic
   Click "🔐 Authorize Wallet"
   Scan QR code with wallet app
   Confirm in wallet
@@ -55,7 +55,7 @@ User:
 ```
 Step 1: User Downloads
   ├─ Goes to GitHub Releases
-  ├─ Downloads: NacklePick Setup 1.0.0.exe
+  ├─ Downloads: Dastic Setup 1.0.0.exe
   └─ Runs installer
 
 Step 2: User Opens App
@@ -159,7 +159,7 @@ Deep link to Acki Nacki Wallet
   ↓
 User's wallet opens
   ↓
-Shows: "Authorize NacklePick Miner?"
+Shows: "Authorize Dastic Miner?"
   ↓
 User confirms
   ↓
@@ -352,7 +352,7 @@ All user features already implemented:
 │     You (App Creator)                    │
 │  Set BEE_APP_ID in .env                  │
 │  Build: npm run build                    │
-│  Upload: NacklePick Setup 1.0.0.exe      │
+│  Upload: Dastic Setup 1.0.0.exe      │
 │  Dapp registered in Acki Nacki network   │
 └────────────┬─────────────────────────────┘
              │

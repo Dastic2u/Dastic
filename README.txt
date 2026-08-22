@@ -19,8 +19,8 @@ STEP 3: BUILD THE .EXE INSTALLER
     npm run build
 
 This creates a "dist" folder with:
-- NacklePick Setup.exe        <- Installer for any PC
-- win-unpacked/NacklePick.exe  <- Portable .exe (no install)
+- Dastic Setup.exe        <- Installer for any PC
+- win-unpacked/Dastic.exe  <- Portable .exe (no install)
 
 STEP 4: ADD TO GITHUB
 ---------------------
@@ -32,7 +32,7 @@ STEP 4: ADD TO GITHUB
 
     git init
     git add .
-    git commit -m "NacklePick v2.0 - Acki Nacki Bee Engine Miner"
+    git commit -m "Dastic v2.0 - Acki Nacki Bee Engine Miner"
     git branch -M main
     git remote add origin https://github.com/YOUR_USERNAME/nacklepick.git
     git push -u origin main
@@ -43,7 +43,7 @@ STEP 5: GET APP_DAPP_ID FROM ACKI NACKI
 ----------------------------------------
 Contact Acki Nacki dev team and provide:
 
-1. App name: NacklePick
+1. App name: Dastic
 2. App link: https://github.com/YOUR_USERNAME/nacklepick
 3. Logo: logo.webp (included in this folder)
 
@@ -76,7 +76,7 @@ FILES IN THIS PROJECT
 FEATURES
 ---------
 ✅ Animated miner character (mines when active, sleeps when idle)
-✅ NacklePick logo in header
+✅ Dastic logo in header
 ✅ Session stats + total sessions counter
 ✅ Era display with 24h countdown timer
 ✅ Reward history with timestamps

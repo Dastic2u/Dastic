@@ -2,7 +2,7 @@
 
 ## Overview
 
-Complete modifications made to transform NacklePick from a developer tool into a production-ready public release with real Bee Engine mining.
+Complete modifications made to transform Dastic from a developer tool into a production-ready public release with real Bee Engine mining.
 
 ---
 
@@ -74,7 +74,7 @@ Complete modifications made to transform NacklePick from a developer tool into a
 **Features:**
 - Load/save user config to disk
 - Per-user settings (APP_ID, background mode, CPU mode)
-- Stored in `%APPDATA%\NacklePick\bee-engine.config.json`
+- Stored in `%APPDATA%\Dastic\bee-engine.config.json`
 - Methods:
   - `loadConfig()` - Read from user directory
   - `saveConfig()` - Write to user directory
@@ -150,7 +150,7 @@ Public users: Can't use it
 ```
 Each user downloads installer
   ↓
-Runs: NacklePick Setup 1.0.0.exe
+Runs: Dastic Setup 1.0.0.exe
   ↓
 Clicks: "Setup / Change"
   ↓
@@ -180,7 +180,7 @@ bee_miner_address_[wallet] → Miner contract address
 
 **System (optional):**
 ```
-~/.NacklePick/bee-engine.config.json → User configuration file
+~/.Dastic/bee-engine.config.json → User configuration file
 ```
 
 ---

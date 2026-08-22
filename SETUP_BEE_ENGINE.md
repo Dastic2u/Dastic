@@ -1,4 +1,4 @@
-# NacklePick - Bee Engine Integration Setup Guide
+# Dastic - Bee Engine Integration Setup Guide
 
 This guide will help you set up Bee Engine integration for real blockchain mining on the Acki Nacki network.
 
@@ -57,7 +57,7 @@ npm start
 npm start
 ```
 
-This launches the NacklePick launcher window.
+This launches the Dastic launcher window.
 
 ## Step 4: Set Up Bee Engine
 
@@ -134,7 +134,7 @@ To switch back to real mining, click "🔐 Authorize" again.
 Contact the Acki Nacki team at: https://t.me/EugeneDAO
 
 Provide:
-- Your app name: "NacklePick Miner"
+- Your app name: "Dastic Miner"
 - App link: (your website or GitHub repo)
 - Logo in WebP format (use https://squoosh.app/ to convert)
 
@@ -199,7 +199,7 @@ To create a Windows installer:
 npm run build
 ```
 
-Output: `dist/nsis/NacklePick-Setup.exe`
+Output: `dist/nsis/Dastic-Setup.exe`
 
 ## Next Steps
 

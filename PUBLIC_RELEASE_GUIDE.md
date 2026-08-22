@@ -1,4 +1,4 @@
-# 🚀 Public Release Guide - NacklePick Bee Engine Miner
+# 🚀 Public Release Guide - Dastic Bee Engine Miner
 
 This guide covers all the modifications made for public release and how to build & distribute your application.
 
@@ -47,7 +47,7 @@ REAL rewards collected from smart contract
 **Setup Flow for End Users:**
 
 ```
-User launches NacklePick
+User launches Dastic
   ↓
 Click "Setup / Change" button
   ↓
@@ -203,10 +203,10 @@ Edit `package.json` to customize:
 {
   "name": "nacklepick-miner",
   "version": "1.0.0",
-  "description": "NacklePick - Multi-wallet NACKL desktop miner",
+  "description": "Dastic - Multi-wallet NACKL desktop miner",
   "build": {
     "appId": "com.nacklepick.miner",
-    "productName": "NacklePick",
+    "productName": "Dastic",
     "win": {
       "target": "nsis",
       "icon": "icon.png"
@@ -223,14 +223,14 @@ npm run build
 
 **Output:**
 - Location: `E:\miner\dist\`
-- Installer: `NacklePick Setup 1.0.0.exe` (or your version)
+- Installer: `Dastic Setup 1.0.0.exe` (or your version)
 - Size: ~150-200 MB (includes Node and all dependencies)
 
 ### Step 4: Test the Built EXE
 
 ```bash
 cd E:\miner\dist
-./NacklePick\ Setup\ 1.0.0.exe
+./Dastic\ Setup\ 1.0.0.exe
 ```
 
 Follow the installer:
@@ -260,7 +260,7 @@ bee_engine.config.json" > .gitignore
 
 # Add files
 git add .
-git commit -m "Initial commit: NacklePick Bee Engine Miner"
+git commit -m "Initial commit: Dastic Bee Engine Miner"
 
 # Add remote
 git remote add origin https://github.com/YOUR_USERNAME/nacklepick-miner.git
@@ -276,8 +276,8 @@ git push -u origin main
 ```bash
 # Requires 'gh' CLI installed
 gh release create v1.0.0 \
-  ./dist/NacklePick\ Setup\ 1.0.0.exe \
-  -t "NacklePick v1.0.0" \
+  ./dist/Dastic\ Setup\ 1.0.0.exe \
+  -t "Dastic v1.0.0" \
   -n "Initial release with Bee Engine mining"
 ```
 
@@ -285,8 +285,8 @@ gh release create v1.0.0 \
 1. Go to your repo: `https://github.com/YOUR_USERNAME/nacklepick-miner`
 2. Click "Releases" → "Create a new release"
 3. Tag: `v1.0.0`
-4. Title: `NacklePick v1.0.0`
-5. Upload: Drag `NacklePick Setup 1.0.0.exe`
+4. Title: `Dastic v1.0.0`
+5. Upload: Drag `Dastic Setup 1.0.0.exe`
 6. Description: Add features and changelog
 7. Click "Publish release"
 
@@ -294,7 +294,7 @@ gh release create v1.0.0 \
 
 Create `README.md`:
 ```markdown
-# NacklePick - Bee Engine Miner
+# Dastic - Bee Engine Miner
 
 Multi-wallet NACKL desktop miner with Bee Engine integration.
 
@@ -305,7 +305,7 @@ Multi-wallet NACKL desktop miner with Bee Engine integration.
 ## Quick Start
 
 1. Download and run the installer
-2. Launch NacklePick
+2. Launch Dastic
 3. Click "Setup / Change" and enter your Dapp ID
 4. Click "⛏️ START MINING"
 
@@ -340,7 +340,7 @@ Email/Telegram: https://t.me/EugeneDAO
 ## Step 2: Provide Information
 
 Share these with the team:
-- **App Name**: NacklePick Miner
+- **App Name**: Dastic Miner
 - **App Link**: Your website or GitHub repo
 - **Logo**: In WebP format (convert at https://squoosh.app/)
 
@@ -348,9 +348,9 @@ Share these with the team:
 
 You'll get something like: `0x1234567890abcdef...`
 
-## Step 4: Use in NacklePick
+## Step 4: Use in Dastic
 
-1. Launch NacklePick
+1. Launch Dastic
 2. Click "Setup / Change"
 3. Paste your Dapp ID
 4. Click "Save & Authorize"
@@ -368,7 +368,7 @@ You'll get something like: `0x1234567890abcdef...`
 - No telemetry or tracking
 
 **Files Created:**
-- `~/.NacklePick/` - User settings (optional)
+- `~/.Dastic/` - User settings (optional)
 - `LocalStorage` - Per-wallet mining keys
 - `Session storage` - Current session state
 
@@ -400,7 +400,7 @@ npm run build
 
 # 3. Test the built EXE thoroughly
 cd dist
-"./NacklePick Setup 1.0.0.exe"
+"./Dastic Setup 1.0.0.exe"
 
 # 4. Create GitHub release with EXE
 # (Use web interface or gh CLI)

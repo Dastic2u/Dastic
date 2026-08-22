@@ -1,7 +1,7 @@
-# Bee Engine Integration for NacklePick Miner
+# Bee Engine Integration for Dastic Miner
 
 ## Overview
-This document outlines the integration of Bee Engine SDK with the NacklePick desktop miner application for real blockchain mining on the Acki Nacki network.
+This document outlines the integration of Bee Engine SDK with the Dastic desktop miner application for real blockchain mining on the Acki Nacki network.
 
 ## Integration Steps
 

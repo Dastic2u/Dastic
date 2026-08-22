@@ -59,7 +59,7 @@ This downloads:
 npm start
 ```
 
-The NacklePick launcher should open.
+The Dastic launcher should open.
 
 ### Step 4: Test Mining (⏱️ 5-10 minutes)
 

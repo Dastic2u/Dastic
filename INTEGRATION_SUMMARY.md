@@ -2,7 +2,7 @@
 
 ## What Was Done
 
-I've fully integrated Bee Engine SDK into your NacklePick miner application. The app now supports **real blockchain mining** on the Acki Nacki network while maintaining a **simulated fallback** for development.
+I've fully integrated Bee Engine SDK into your Dastic miner application. The app now supports **real blockchain mining** on the Acki Nacki network while maintaining a **simulated fallback** for development.
 
 ## Files Created
 
@@ -414,7 +414,7 @@ Before going production:
 
 **Integration Complete! 🎉**
 
-Your NacklePick miner is now ready for real blockchain mining. Update your dapp ID and start mining on the Acki Nacki network!
+Your Dastic miner is now ready for real blockchain mining. Update your dapp ID and start mining on the Acki Nacki network!
 
 ---
 

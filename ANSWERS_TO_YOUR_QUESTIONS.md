@@ -56,7 +56,7 @@ Real Rewards: NACKL transferred from contract
 **Setup Flow for Each User:**
 
 ```
-User A launches NacklePick
+User A launches Dastic
   ↓
 Click "🔐 Setup / Change"
   ↓
@@ -72,7 +72,7 @@ Ready to mine! User A is mining
 
 ---
 
-User B also launches NacklePick (same PC)
+User B also launches Dastic (same PC)
   ↓
 Click "🔐 Setup / Change"
   ↓
@@ -95,7 +95,7 @@ Completely independent mining sessions!
 
 Main Launcher Window (index.html):
 ```
-🐝 NacklePick
+🐝 Dastic
 
 Wallet List:
 ├─ [User A's Wallet] ⛏️ Launch    [Delete]
@@ -159,7 +159,7 @@ Now running:
 **Real-World Usage:**
 
 ```
-9:00 AM - User launches NacklePick
+9:00 AM - User launches Dastic
           Starts 1-hour mining session
           Minimizes to tray
 
@@ -390,15 +390,15 @@ npm run build
 Output:
 ```
 E:\miner\dist\
-├─ NacklePick Setup 1.0.0.exe  ← The installer
-└─ NacklePick 1.0.0.exe        ← Portable version (optional)
+├─ Dastic Setup 1.0.0.exe  ← The installer
+└─ Dastic 1.0.0.exe        ← Portable version (optional)
 ```
 
 ### **Step 5: Test the Built EXE** (5 minutes - IMPORTANT!)
 
 ```bash
 # Run the installer
-E:\miner\dist\NacklePick Setup 1.0.0.exe
+E:\miner\dist\Dastic Setup 1.0.0.exe
 ```
 
 Test:
@@ -414,7 +414,7 @@ Test:
 cd E:\miner
 git init
 git add .
-git commit -m "Initial commit: NacklePick Bee Engine Miner v1.0.0"
+git commit -m "Initial commit: Dastic Bee Engine Miner v1.0.0"
 git remote add origin https://github.com/YOUR_USERNAME/nacklepick-miner.git
 git push -u origin main
 ```
@@ -427,16 +427,16 @@ git push -u origin main
 3. Click: "Create a new release"
 4. Fill in:
    - Tag: `v1.0.0`
-   - Title: `NacklePick v1.0.0`
+   - Title: `Dastic v1.0.0`
    - Description: Features, how to use, etc.
-5. Drag & drop: `NacklePick Setup 1.0.0.exe`
+5. Drag & drop: `Dastic Setup 1.0.0.exe`
 6. Click: "Publish release"
 
 **Method B: Using Command Line**
 ```bash
 gh release create v1.0.0 \
-  ./dist/NacklePick\ Setup\ 1.0.0.exe \
-  -t "NacklePick v1.0.0" \
+  ./dist/Dastic\ Setup\ 1.0.0.exe \
+  -t "Dastic v1.0.0" \
   -n "First release - Bee Engine mining"
 ```
 

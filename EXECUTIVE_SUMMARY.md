@@ -1,4 +1,4 @@
-# 🎯 Executive Summary - NacklePick Public Release Update
+# 🎯 Executive Summary - Dastic Public Release Update
 
 ## What You Asked For
 ```
@@ -158,7 +158,7 @@ Window Hidden:  Mining continues (if enabled)
 Window Closed:  Mining stops
 
 User can minimize and continue working
-NacklePick keeps mining in background
+Dastic keeps mining in background
 Tray shows status anytime
 ```
 
@@ -303,7 +303,7 @@ git init && git commit && git push
 ## 💬 What Users Will Experience
 
 ```
-User downloads NacklePick
+User downloads Dastic
   ↓
 Runs installer
   ↓
