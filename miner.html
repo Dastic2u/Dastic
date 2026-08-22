@@ -1668,6 +1668,16 @@
      * One row per payout — each row IS one round's earnings straight from the
      * wallet's transaction ledger, not a derived or apportioned figure.
      */
+    // How much history to pull, and how much of it to actually draw.
+    // The fetch bound exists for correctness (the epoch total must be
+    // complete); the render bound exists so a heavy mining day cannot turn
+    // the panel into a wall of hundreds of rows. They are deliberately
+    // different numbers: everything fetched counts toward the totals, only
+    // the newest PAYOUT_ROWS_SHOWN are drawn, and the remainder is summarised.
+    const HISTORY_PAGE_SIZE = 50;
+    const HISTORY_MAX_PAGES = 6;   // up to 300 payouts — beyond any real day
+    const PAYOUT_ROWS_SHOWN = 30;
+
     function renderPayoutList(rounds, unscoped) {
       const list = document.getElementById('payoutList');
       if (!list) return;
@@ -1679,8 +1689,13 @@
       // Grouped by calendar date, on instruction. A 24h epoch does not align
       // to midnight, so an epoch's payouts routinely straddle two dates —
       // hence real grouping with per-day subtotals rather than one flat list.
+      const shown = rounds.slice(0, PAYOUT_ROWS_SHOWN);
+      const hiddenCount = rounds.length - shown.length;
+      const hiddenTotal = rounds.slice(PAYOUT_ROWS_SHOWN)
+        .reduce((sum, t) => sum + BigInt(t.value || 0), 0n);
+
       const byDate = new Map();
-      for (const t of rounds) {
+      for (const t of shown) {
         const when = new Date(Number(t.created_at) * 1000);
         const key = when.toLocaleDateString(undefined,
           { weekday: 'short', day: 'numeric', month: 'short' });
@@ -1704,7 +1719,11 @@
             '</div>';
         }).join('');
         return head + rows;
-      }).join('') + (unscoped
+      }).join('') + (hiddenCount > 0
+        ? '<div style="opacity:.55;padding:8px 2px;font-size:.8rem;">' +
+          `+ ${hiddenCount} earlier payout${hiddenCount === 1 ? '' : 's'} this epoch ` +
+          `(${formatNackl(hiddenTotal.toString(), 3)} NACKL)</div>`
+        : '') + (unscoped
         ? '<div style="opacity:.45;padding:6px 2px;font-size:.75rem;">' +
           'showing all known payouts — epoch clock not read yet</div>'
         : '');
@@ -1734,18 +1753,43 @@
           }
         }
 
-        const hist = await beeEngine.getWalletHistory({ pageSize: 50 });
-        if (!hist.success) {
-          subEl.textContent = 'history unavailable';
-          return false;
-        }
         // Scope every figure to the CURRENT 24h epoch, on instruction: "every
         // record should clear after the day epoch resets." The chain already
         // does this for taps (tap_sum resets per big epoch); the payout list
         // has no such server-side reset, so it is filtered here against the
         // epoch boundary. created_at is unix SECONDS (verified live).
         const epochStartMs = currentEpochStartMs();
-        const all = (hist.data || []).filter((t) => t.tx_type === 'Mining');
+
+        // Page until the epoch is fully covered, rather than trusting one
+        // page to hold it. A reward can land about once per ~332s reward
+        // period, so a full day of uninterrupted mining could in principle
+        // produce a couple of hundred payouts — well past any single page.
+        // Stopping at one page would silently UNDERCOUNT the epoch total,
+        // which is worse than showing fewer rows: the headline NACKL figure
+        // would simply be wrong. Bounded by HISTORY_MAX_PAGES so a wallet
+        // with a long history can never turn this into an endless crawl.
+        const all = [];
+        let cursor = null;
+        let reachedEpochStart = false;
+        for (let page = 0; page < HISTORY_MAX_PAGES; page++) {
+          const hist = await beeEngine.getWalletHistory({
+            pageSize: HISTORY_PAGE_SIZE,
+            ...(cursor ? { cursor } : {})
+          });
+          if (!hist.success) {
+            if (!all.length) { subEl.textContent = 'history unavailable'; return false; }
+            break; // keep what we already have rather than blanking the panel
+          }
+          const rows = hist.data || [];
+          all.push(...rows.filter((t) => t.tx_type === 'Mining'));
+          // Rows come newest-first, so once one predates the epoch there is
+          // nothing older left worth fetching.
+          reachedEpochStart = epochStartMs !== null &&
+            rows.some((t) => Number(t.created_at) * 1000 < epochStartMs);
+          cursor = hist.nextCursor;
+          if (reachedEpochStart || !hist.hasNextPage || !cursor) break;
+        }
+
         const rounds = epochStartMs === null
           ? all
           : all.filter((t) => Number(t.created_at) * 1000 >= epochStartMs);
