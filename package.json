@@ -1,16 +1,16 @@
 {
   "name": "nacklepick-miner",
   "version": "1.0.0",
-  "description": "NacklePick - Multi-wallet NACKL desktop miner with Bee Engine",
+  "description": "Dastic - Multi-wallet NACKL desktop miner with Bee Engine",
   "main": "launcher.js",
-  "author": "NacklePick Miner",
+  "author": "Dastic Miner",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win"
   },
   "build": {
     "appId": "com.nacklepick.miner",
-    "productName": "NacklePick",
+    "productName": "Dastic",
     "directories": {
       "output": "dist"
     },

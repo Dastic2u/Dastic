@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Bee Engine Bridge</title></head>
+<body>
+<script type="module">
+  import init, {
+    gen_mining_keys,
+    ensure_mining_keys_propagated,
+    get_miner_address_by_wallet_name,
+    multisig_balances,
+    Miner,
+    Wallet
+  } from './node_modules/@teamgosh/bee-sdk/bee_sdk.js';
+
+  const sessions = new Map();
+  function getSession(key) {
+    if (!sessions.has(key)) sessions.set(key, {});
+    return sessions.get(key);
+  }
+
+  // One Wallet per (endpoints, apiUrl, appId). Constructing it is cheap and
+  // stateless — it holds no session — but there is no reason to rebuild it
+  // per call either. Separate from the Miner: the Wallet reads the USER's
+  // multifactor account (balance, history), the Miner drives the miner slot.
+  const wallets = new Map();
+  function walletFor({ endpoints, apiUrl, appId }) {
+    const key = JSON.stringify([endpoints, apiUrl, appId]);
+    if (!wallets.has(key)) wallets.set(key, new Wallet(endpoints, null, apiUrl, appId));
+    return wallets.get(key);
+  }
+
+  // wasm-bindgen returns objects whose fields are GETTERS over wasm memory.
+  // They do not survive structuredClone across the IPC boundary (they arrive
+  // as {}), and they leak until freed. So every SDK result is copied into a
+  // plain object field-by-field here, then freed, and only the copy is sent.
+  function plainMap(m) {
+    if (!m) return {};
+    if (m instanceof Map) return Object.fromEntries(m);
+    return { ...m };
+  }
+  function plainTx(tx) {
+    const out = {
+      id: tx.id,
+      tx_type: tx.tx_type,
+      value: tx.value,
+      created_at: tx.created_at,
+      src_name: tx.src_name
+    };
+    try { tx.free(); } catch (e) {}
+    return out;
+  }
+
+  let initPromise = null;
+  function ensureInit() {
+    if (!initPromise) initPromise = init();
+    return initPromise;
+  }
+
+  async function handle(payload) {
+    const { requestId, action, args } = payload;
+    try {
+      await ensureInit();
+      let result;
+
+      switch (action) {
+        case 'generateMiningKeys': {
+          const r = await gen_mining_keys(args.appId);
+          result = { success: true, deepLink: r.deep_link, public: r.public, secret: r.secret };
+          break;
+        }
+        case 'waitForKeyPropagation': {
+          const { sessionKey, endpoints, appId, anWalletName, publicKey, secretKey, maxAttempts, intervalMs } = args;
+          const minerAddress = await get_miner_address_by_wallet_name({
+            client_config: { network: { endpoints } },
+            wallet_name: anWalletName
+          });
+          await ensure_mining_keys_propagated({
+            client_config: { network: { endpoints } },
+            miner_address: minerAddress,
+            app_id: appId,
+            expected_owner_public: publicKey,
+            max_attempts: maxAttempts,
+            interval_ms: intervalMs
+          });
+          const miner = await Miner.new(endpoints, appId, minerAddress, publicKey, secretKey);
+          const session = getSession(sessionKey);
+          session.miner = miner;
+          session.isMining = false;
+          result = { success: true, minerAddress };
+          break;
+        }
+        case 'rebuildMinerInstance': {
+          const { sessionKey, endpoints, appId, minerAddress, publicKey, secretKey } = args;
+          const miner = await Miner.new(endpoints, appId, minerAddress, publicKey, secretKey);
+          const session = getSession(sessionKey);
+          session.miner = miner;
+          session.isMining = false;
+          result = { success: true };
+          break;
+        }
+        // Does the chain still agree that OUR mining key owns this miner slot?
+        //
+        // This is the check the restore path never had, and its absence is the
+        // whole of run24. First-time pairing goes through waitForKeyPropagation
+        // above, which will not return until ensure_mining_keys_propagated()
+        // confirms `owner_public[app_id]` on the Miner account matches the key we
+        // generated. Every subsequent launch goes through rebuildMinerInstance,
+        // which just constructs a Miner from whatever is in localStorage and
+        // reports success — Miner.new() does not authenticate anything.
+        //
+        // So a pairing that has since been replaced (a re-pair from another
+        // device, a new app-id registration, a wallet-side reset) restores
+        // silently and looks perfectly healthy: the getters need no signature, so
+        // tap_sum, the epoch counters and the balance all read fine. Only the two
+        // AUTHENTICATED entry points fail, and they fail identically —
+        // setCommitData and getReward both sit behind
+        // onlyOwnerPubkey(_owner_pubkey[id]), which raises ERR_NOT_OWNER = 402.
+        // run24: 105 taps computed, 2 submissions, both refused 402, 0 accepted,
+        // over 13 minutes in which every diagnostic on screen said the chain was
+        // reachable. It was. It just wasn't listening to us.
+        //
+        // The same SDK function does the check, with a small attempt budget
+        // instead of the five-minute pairing window — this runs at startup and
+        // must not add minutes to it.
+        case 'verifyMiningOwner': {
+          const { endpoints, appId, minerAddress, publicKey, maxAttempts, intervalMs } = args;
+          try {
+            await ensure_mining_keys_propagated({
+              client_config: { network: { endpoints } },
+              miner_address: minerAddress,
+              app_id: appId,
+              expected_owner_public: publicKey,
+              max_attempts: maxAttempts || 2,
+              interval_ms: intervalMs || 2000
+            });
+            result = { success: true, verified: true };
+          } catch (error) {
+            const message = (error && (error.message || String(error))) || 'verification failed';
+            // "The chain answered and the key is wrong" and "the chain did not
+            // answer" both arrive here as a rejection, and treating the second as
+            // the first would tell a user with a perfectly good pairing to
+            // re-pair every time mainnet is congested. The SDK's own strings are
+            // the discriminator: a failed read is reported through
+            // "ensure_mining_keys_propagated: miner.get_details (...)", while a
+            // read that succeeded and disagreed exhausts the poll loop and ends
+            // "Max attempts reached".
+            //
+            // Anything unrecognised is treated as INCONCLUSIVE rather than as a
+            // mismatch. Being wrong in that direction costs one wasted batch and
+            // a 402, which the submit handler now reads correctly anyway; being
+            // wrong in the other direction refuses to mine on a guess.
+            const readFailed = /get_details|pool timed out|queue is full|QUEUE_OVERFLOW|timed out|timeout|connection|dns error|SendRequest|Send Request|server_code|fetch|network/i
+              .test(message);
+            const mismatch = !readFailed && /max attempts reached/i.test(message);
+            result = {
+              success: true,
+              verified: false,
+              mismatch,
+              inconclusive: !mismatch,
+              error: message
+            };
+          }
+          break;
+        }
+        case 'verifyFirstTap': {
+          const session = getSession(args.sessionKey);
+          if (!session.miner) throw new Error('Not paired yet');
+          session.miner.add_tap(args.x, args.y);
+          result = { success: true };
+          break;
+        }
+        case 'startMining': {
+          const session = getSession(args.sessionKey);
+          if (!session.miner) throw new Error('Not paired yet');
+          // can_start() is the engine's own answer about whether it is
+          // free, so let it settle disputes with this local flag rather
+          // than the flag winning. The flag is only ever cleared by
+          // stopMining(), and the renderer deliberately no longer calls
+          // that on a normal burst end (Miner.stop() mid-`submitting`
+          // destroys the burst's work). Without this, the flag would stay
+          // true forever after burst one and every later start would fail
+          // with "Mining already in progress" — pushing the caller into a
+          // stale-lock recovery path whose repair step is the very
+          // stopMining() call we're trying to avoid.
+          const engineFree = session.miner.can_start();
+          if (session.isMining && engineFree) {
+            console.log('[BeeBridge] Clearing a stale isMining flag — can_start() reports the engine is free.');
+            session.isMining = false;
+          }
+          if (session.isMining) throw new Error('Mining already in progress');
+          if (!engineFree) throw new Error('Mining cannot start right now.');
+          session.isMining = true;
+          session.currentSession = { startTime: Date.now(), duration: args.durationMs, taps: 0 };
+          session.miner.start(args.durationMs, (miningEvent) => {
+            // Keep this flag honest as the worker progresses. The SDK's own
+            // wasm string table gives the lifecycle as
+            // queued -> computing -> submitting -> finished, plus terminal
+            // "removed"/"cancelled". Any of those terminal states means
+            // this burst is genuinely over, so record it here instead of
+            // waiting for can_start() to be asked.
+            try {
+              const parsed = typeof miningEvent === 'string' ? JSON.parse(miningEvent) : miningEvent;
+              const status = parsed && parsed.action === 'status_updated' && parsed.data && parsed.data.status;
+              if (status === 'finished' || status === 'removed' || status === 'cancelled') {
+                session.isMining = false;
+              }
+            } catch (err) {
+              // A malformed event must never break event forwarding.
+            }
+            window.beeIPC.sendResponse({
+              requestId: 'event:' + args.sessionKey,
+              success: true,
+              event: miningEvent
+            });
+          });
+          result = { success: true };
+          break;
+        }
+        case 'addTap': {
+          const session = getSession(args.sessionKey);
+          if (!session.isMining || !session.miner) throw new Error('No active mining session');
+          session.miner.add_tap(args.x, args.y);
+          if (session.currentSession) session.currentSession.taps++;
+          result = { success: true, taps: session.currentSession?.taps || 0 };
+          break;
+        }
+        case 'stopMining': {
+          const session = getSession(args.sessionKey);
+          // `force` deliberately ignores session.isMining. The renderer's
+          // bookkeeping and this flag go out of sync whenever a worker is
+          // closed out locally while the SDK's own worker is still alive —
+          // and in that state can_start() stays false with nothing left that
+          // is allowed to clear it. As long as we have a miner instance,
+          // stop() is the escape hatch.
+          if (!session.miner) {
+            result = { success: false, error: 'Not paired yet' };
+            break;
+          }
+          if (!session.isMining && !args.force) {
+            result = { success: false, error: 'No active mining session' };
+            break;
+          }
+          if (args.force && !session.isMining) {
+            console.warn('[BeeBridge] Forced stop with no session flag set — stopping the ' +
+              'SDK worker anyway to free the engine.');
+          }
+          session.miner.stop();
+          session.isMining = false;
+          result = { success: true, session: session.currentSession };
+          break;
+        }
+        case 'canStart': {
+          // Miner.stop() is synchronous but the SDK still has to submit
+          // the session's proof/root to the chain in the background —
+          // can_start() can correctly stay false for a bit after stop()
+          // returns. Callers poll this instead of assuming stop() alone
+          // means "ready for a new session".
+          const session = getSession(args.sessionKey);
+          result = { success: true, canStart: session.miner ? session.miner.can_start() : false };
+          break;
+        }
+        case 'getRewards': {
+          const session = getSession(args.sessionKey);
+          if (!session.miner) throw new Error('Not paired yet');
+          await session.miner.get_reward();
+          result = { success: true, claimed: true };
+          break;
+        }
+        case 'getCurrentBlock': {
+          // GraphqlBlockData.seq_no is the chain's current block height.
+          // This is the one honest clock available: epoch_start and
+          // epoch_5m_start are in the same block-sequence unit, but they
+          // live on the miner's own account and only roll forward when
+          // that account submits taps, so they go stale while idle. The
+          // current block never does.
+          const session = getSession(args.sessionKey);
+          if (!session.miner) throw new Error('Not paired yet');
+          const block = await session.miner.get_current_block();
+          result = { success: true, seqNo: block.seq_no.toString() };
+          block.free();
+          break;
+        }
+        case 'getMinerData': {
+          const session = getSession(args.sessionKey);
+          if (!session.miner) throw new Error('Not paired yet');
+          const data = await session.miner.get_miner_data();
+          result = {
+            success: true,
+            epochStart: data.epoch_start.toString(),
+            epoch5mStart: data.epoch_5m_start.toString(),
+            tapSum: data.tap_sum.toString(),
+            tapSum5m: data.tap_sum_5m.toString()
+          };
+          // Wasm-backed object — the reference implementation frees it
+          // immediately after reading the fields. This is polled on a
+          // timer, so skipping it leaks a little on every call.
+          data.free();
+          break;
+        }
+        // Resolve the user's OWN multifactor (wallet) address from the wallet
+        // name already stored at pairing. This is the piece the app never had:
+        // the wallet-name pairing flow yields a MINER address only, so every
+        // balance shown so far has been the miner contract's, not the user's.
+        // get_multifactor_data_by_name() closes that gap without the heavier
+        // BeeConnect handshake the reference app uses.
+        case 'getWalletProfile': {
+          const wallet = walletFor(args);
+          const details = await wallet.get_multifactor_data_by_name(args.walletName);
+          if (!details) { result = { success: false, error: 'wallet name not found on chain' }; break; }
+          const out = { address: details.address, name: details.name, ownerPubkey: details.owner_pubkey };
+          try { details.free(); } catch (e) {}
+          console.log('[bridge] getWalletProfile ->', JSON.stringify(out));
+          result = { success: true, ...out };
+          break;
+        }
+        // The user's own NACKL balance. `ecc` is keyed by currency id; 1 =
+        // NACKL, 9 decimals.
+        case 'getWalletBalance': {
+          const wallet = walletFor(args);
+          const balances = await wallet.get_multifactor_balances({ multifactor_address: args.multifactorAddress });
+          const ecc = plainMap(balances.ecc);
+          // `popitgame` is the SDK's OTHER native-balance map on the same
+          // result. Mined NACKL does not land in `ecc` (that is the
+          // spendable/unlocked figure) — reported by the user 2026-08-22:
+          // locked 90,749 vs unlocked 20. So both maps get marshalled and
+          // logged; whichever carries the locked figure is the one to show.
+          const popitgame = plainMap(balances.popitgame);
+          try { balances.free(); } catch (e) {}
+          console.log('[bridge] getWalletBalance ecc ->', JSON.stringify(ecc),
+                      'popitgame ->', JSON.stringify(popitgame));
+          result = { success: true, ecc, popitgame, nacklRaw: ecc['1'] ?? ecc[1] ?? null };
+          break;
+        }
+        // Transaction history for the user's wallet. Note the SEPARATE
+        // mining_cursor/next_mining_cursor pagination track the SDK exposes —
+        // mining credits are paged independently of ordinary transfers, which
+        // is what makes a reliable per-round earnings figure possible at all.
+        case 'getWalletHistory': {
+          const wallet = walletFor(args);
+          const hist = await wallet.get_history({
+            multifactor_address: args.multifactorAddress,
+            token_id: args.tokenId || '1',
+            page_size: args.pageSize || 25,
+            ...(args.cursor ? { cursor: args.cursor } : {}),
+            ...(args.miningCursor ? { mining_cursor: args.miningCursor } : {})
+          });
+          const out = {
+            data: Array.from(hist.data || []).map(plainTx),
+            hasNextPage: hist.has_next_page,
+            nextCursor: hist.next_cursor,
+            nextMiningCursor: hist.next_mining_cursor
+          };
+          try { hist.free(); } catch (e) {}
+          console.log('[bridge] getWalletHistory ->', out.data.length, 'tx; types:',
+            JSON.stringify([...new Set(out.data.map(t => t.tx_type))]),
+            '; sample:', JSON.stringify(out.data.slice(0, 3)));
+          result = { success: true, ...out };
+          break;
+        }
+        case 'getBalance': {
+          // currency_id 1 = NACKL (per @teamgosh/bee-sdk README balance example)
+          const balances = await multisig_balances({
+            endpoints: args.endpoints,
+            address: args.address
+          });
+          console.log('[bridge] getBalance(minerContract) full ->', JSON.stringify(plainMap(balances)));
+          result = { success: true, nacklRaw: balances[1] ?? null, balances: plainMap(balances) };
+          break;
+        }
+        default:
+          result = { success: false, error: 'Unknown action: ' + action };
+      }
+
+      window.beeIPC.sendResponse({ requestId, ...result });
+    } catch (error) {
+      window.beeIPC.sendResponse({ requestId, success: false, error: error.message || String(error) });
+    }
+  }
+
+  window.beeIPC.onRequest(handle);
+</script>
+</body>
+</html>

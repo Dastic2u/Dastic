@@ -17,7 +17,7 @@ function createWindow() {
     },
     icon: path.join(__dirname, 'icon.ico'),
     show: true,
-    title: 'NacklePick'
+    title: 'Dastic'
   });
 
   mainWindow.loadFile('index.html');
@@ -50,7 +50,7 @@ function createTray() {
   }
 
   tray = new Tray(trayIcon);
-  tray.setToolTip('NacklePick - NACKL Miner');
+  tray.setToolTip('Dastic - NACKL Miner');
   updateTrayMenu();
 
   tray.on('click', () => {
@@ -70,7 +70,7 @@ function updateTrayMenu() {
   const sessions = global.sessionsCount || 0;
 
   const contextMenu = Menu.buildFromTemplate([
-    { label: 'NacklePick', enabled: false },
+    { label: 'Dastic', enabled: false },
     { type: 'separator' },
     { label: `Status: ${miningStatus}`, enabled: false },
     { label: `Sessions: ${sessions}`, enabled: false },
@@ -124,7 +124,7 @@ ipcMain.on('update-tray', (event, data) => {
   global.miningStatus = data.status;
   global.sessionsCount = data.sessions;
   if (tray) {
-    tray.setToolTip(`NacklePick — ${data.status} | Sessions: ${data.sessions}`);
+    tray.setToolTip(`Dastic — ${data.status} | Sessions: ${data.sessions}`);
     updateTrayMenu();
   }
 });
