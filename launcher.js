@@ -325,7 +325,11 @@ app.whenReady().then(() => {
   registerBeeEngineIpc();
   createLauncher();
   createTray();
-  setTimeout(() => createMinerWindow('martins'), 1500);
+  // Deliberately opens NO wallet on startup. This used to auto-open a
+  // hard-coded personal wallet name, which meant a fresh install on someone
+  // else's machine popped a miner window for an account they do not own.
+  // The launcher lists whatever wallets the user has added (an empty list on
+  // first run) and they choose which to open.
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
