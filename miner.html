@@ -1379,6 +1379,15 @@
         (overrunsSession
           ? ` That's longer than the ~${sessionSec}s session — this burst will get trimmed ` +
             `down to whatever fits when it actually runs, not the full ${taps}.`
+          : '') +
+        // The single most confusing thing about this setting: a worker's tap
+        // schedule is fixed when it starts, so a change cannot affect the burst
+        // already computing — and a burst runs up to ~185s. Without saying so,
+        // a user changes the value, watches the old spacing for three minutes,
+        // and concludes the setting does nothing. (It does: measured 2.48-2.52s
+        // against a configured 2.5s, on two wallets at once, 2026-08-23.)
+        (mining
+          ? ' Applies to the NEXT burst — the one already computing keeps the spacing it started with.'
           : '');
     }
 
