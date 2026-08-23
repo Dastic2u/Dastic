@@ -317,7 +317,24 @@
 
     const STORAGE_KEY = 'nacklepick_wallets';
 
-    let wallets = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    // Reported live: the launcher showed its empty state while localStorage
+    // demonstrably held two wallets. Logging what was actually read — and
+    // surviving a corrupt value instead of throwing — turns "my wallets are
+    // gone" into something answerable from a log.
+    let wallets = [];
+    try {
+      const rawWallets = localStorage.getItem(STORAGE_KEY);
+      wallets = JSON.parse(rawWallets) || [];
+      if (!Array.isArray(wallets)) wallets = [];
+      console.log('[launcher] wallet list loaded: ' + wallets.length +
+        ' wallet(s) [' + wallets.map(function (w) { return w && w.name; }).join(', ') + ']' +
+        ' from key "' + STORAGE_KEY + '" (raw length ' +
+        (rawWallets === null ? 'null' : rawWallets.length) + ')');
+    } catch (e) {
+      console.error('[launcher] wallet list is corrupt and could not be parsed — ' +
+        'starting empty rather than crashing the launcher:', e.message);
+      wallets = [];
+    }
 
     function saveWallets() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(wallets));
@@ -340,8 +357,8 @@
         list.innerHTML = `
           <div style="text-align:center; color:#666; padding: 30px 10px;">
             <div style="font-size:2rem; margin-bottom:8px;">🐝</div>
-            <div style="font-size:0.95rem;">' + t('launcher.noWallets') + '</div>
-            <div style="font-size:0.8rem; margin-top:4px;">' + t('launcher.addPrompt') + '</div>
+            <div style="font-size:0.95rem;">${t('launcher.noWallets')}</div>
+            <div style="font-size:0.8rem; margin-top:4px;">${t('launcher.addPrompt')}</div>
           </div>
         `;
         return;
