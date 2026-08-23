@@ -37,6 +37,14 @@ const fs = require('fs');
 // Only remove this alongside a real migration that copies the folder across.
 app.setPath('userData', path.join(app.getPath('appData'), 'NacklePick'));
 
+// Which profile this process actually ended up on. "No wallets, and the UI is
+// back in English" is the signature of a DIFFERENT (empty) profile rather than
+// lost data -- the language lives in the same store as the wallet list, so
+// both reverting together points at the store, not at either feature. Printed
+// on every start so that question is answerable from one line of the log.
+console.log('[launcher] userData profile: ' + app.getPath('userData') +
+  '  (exe: ' + app.getPath('exe') + ')');
+
 // Only ever one instance against this profile.
 //
 // Chromium locks the userData directory, so a SECOND instance does not fail
@@ -440,6 +448,59 @@ none of ${allWallets.length} wallet${allWallets.length === 1 ? '' : 's'} mining`
       : 'Dastic');
   }
 }
+
+/**
+ * A plain-file mirror of the wallet list.
+ *
+ * localStorage is the wrong single source of truth for something this
+ * important. It lives inside the Chromium profile, and a profile that is
+ * locked by another process, or replaced, reads back EMPTY rather than
+ * failing -- which is indistinguishable from "the user has no wallets" and
+ * cost several rounds of "my wallets are gone" when the data was on disk the
+ * whole time. This mirror sits in userData as ordinary JSON: readable,
+ * greppable, restorable by hand, and unaffected by profile locking.
+ *
+ * The renderer still uses localStorage as its working copy. This is the
+ * safety net: written on every change, and read back only when localStorage
+ * comes up empty while the mirror has entries.
+ */
+function walletsFilePath() {
+  return path.join(app.getPath('userData'), 'wallets.json');
+}
+
+ipcMain.handle('wallets:readMirror', () => {
+  try {
+    const p = walletsFilePath();
+    if (!fs.existsSync(p)) return [];
+    const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    console.warn('[launcher] Could not read the wallet mirror:', e.message);
+    return [];
+  }
+});
+
+ipcMain.handle('wallets:writeMirror', (event, list) => {
+  try {
+    if (!Array.isArray(list)) return false;
+    // Never let an empty list overwrite a populated mirror. An empty renderer
+    // list is far more likely to mean "this profile did not load" than "the
+    // user deleted every wallet", and the mirror exists precisely to survive
+    // that case. Deleting the last wallet on purpose is handled by
+    // wallets:clearMirror below, which is explicit about it.
+    if (list.length === 0) return false;
+    fs.writeFileSync(walletsFilePath(), JSON.stringify(list, null, 2));
+    return true;
+  } catch (e) {
+    console.warn('[launcher] Could not write the wallet mirror:', e.message);
+    return false;
+  }
+});
+
+ipcMain.handle('wallets:clearMirror', () => {
+  try { fs.writeFileSync(walletsFilePath(), '[]'); return true; }
+  catch (e) { return false; }
+});
 
 // IPC handlers
 ipcMain.on('renderer-error', (event, data) => {

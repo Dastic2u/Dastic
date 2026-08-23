@@ -338,6 +338,34 @@
 
     function saveWallets() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(wallets));
+      // Mirror to a plain file too. See the mirror's comment in launcher.js:
+      // localStorage reads back EMPTY when the Chromium profile is locked or
+      // replaced, which looks exactly like having no wallets.
+      ipcRenderer.invoke('wallets:writeMirror', wallets).catch(() => {});
+    }
+
+    /**
+     * Restore from the file mirror when localStorage came up empty.
+     *
+     * Only ever ADDS wallets that are missing, and only when localStorage had
+     * none -- an empty working copy alongside a populated mirror means the
+     * profile did not load, not that the user deleted everything. Deliberate
+     * deletion goes through deleteWallet(), which clears the mirror too.
+     */
+    async function restoreFromMirrorIfEmpty() {
+      if (wallets.length > 0) return;
+      try {
+        const mirrored = await ipcRenderer.invoke('wallets:readMirror');
+        if (!Array.isArray(mirrored) || mirrored.length === 0) return;
+        wallets = mirrored;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(wallets));
+        console.warn('[launcher] localStorage held no wallets but the file mirror had ' +
+          mirrored.length + ' — restored [' + mirrored.map(function (w) { return w && w.name; }).join(', ') +
+          ']. This normally means the profile was locked by another copy of the app.');
+        renderWallets();
+      } catch (e) {
+        console.warn('[launcher] Could not consult the wallet mirror:', e.message);
+      }
     }
 
     // Static markup first, then the picker. renderWallets() is re-run on
@@ -428,6 +456,8 @@
     function deleteWallet(name) {
       if (!confirm(`Delete wallet "${name}"? This cannot be undone.`)) return;
       wallets = wallets.filter(w => w.name !== name);
+      // An explicit deletion is the one case where an empty list is genuine.
+      if (wallets.length === 0) ipcRenderer.invoke('wallets:clearMirror').catch(() => {});
       saveWallets();
       renderWallets();
     }
@@ -503,6 +533,12 @@
 
     // Initial render
     renderWallets();
+    // Seed the mirror from a healthy load, or recover from it after an empty one.
+    if (wallets.length > 0) {
+      ipcRenderer.invoke('wallets:writeMirror', wallets).catch(() => {});
+    } else {
+      restoreFromMirrorIfEmpty();
+    }
   </script>
 </body>
 </html>
