@@ -2,6 +2,47 @@ const { app, BrowserWindow, Tray, Menu, ipcMain, powerSaveBlocker, dialog, scree
 const path = require('path');
 const fs = require('fs');
 
+// In a packaged build there is no terminal, so every console.error below was
+// written to nowhere — which is exactly why "the screen goes blank" could be
+// reported but never diagnosed. Mirror everything to a file in userData,
+// rotated so it cannot grow without limit on a machine that mines all day.
+// Moved to the TOP of the file on purpose: this used to sit after the
+// single-instance-lock check, so a launch that got REFUSED never reached
+// it -- that whole failure path logged to nowhere in a packaged build,
+// with no terminal to see it in either. "it works when Claude opens it,
+// not when I do" turned out to be exactly this: an earlier, already-
+// broken instance silently holding the lock, and every real launch after
+// it refused with no visible trace anywhere.
+const LOG_MAX_BYTES = 2 * 1024 * 1024;
+let logFilePath = null;
+function logFile() {
+  if (logFilePath === null) {
+    try {
+      logFilePath = path.join(app.getPath('userData'), 'dastic.log');
+      if (fs.existsSync(logFilePath) && fs.statSync(logFilePath).size > LOG_MAX_BYTES) {
+        fs.renameSync(logFilePath, logFilePath + '.1');
+      }
+    } catch (e) { logFilePath = ''; }
+  }
+  return logFilePath;
+}
+function fileLog(line) {
+  const p = logFile();
+  if (!p) return;
+  try { fs.appendFileSync(p, line + String.fromCharCode(10)); } catch (e) {}
+}
+// Wrap the existing console calls rather than rewriting every log site.
+for (const level of ['log', 'warn', 'error']) {
+  const original = console[level].bind(console);
+  console[level] = (...args) => {
+    original(...args);
+    fileLog(args.map((a) => {
+      if (typeof a === 'string') return a;
+      try { return JSON.stringify(a); } catch (e) { return String(a); }
+    }).join(' '));
+  };
+}
+
 // Minimal .env loader — no dotenv dependency needed for a single KEY=VALUE
 // file. Only sets vars that aren't already set (real env vars win).
 (function loadDotEnv() {
@@ -99,39 +140,7 @@ const { registerBeeEngineIpc } = require('./bee-engine-main');
  * Elapsed-time questions about the mining flow are the main thing these logs
  * get read for, so the timestamp belongs on every line.
  */
-// In a packaged build there is no terminal, so every console.error below was
-// written to nowhere — which is exactly why "the screen goes blank" could be
-// reported but never diagnosed. Mirror everything to a file in userData,
-// rotated so it cannot grow without limit on a machine that mines all day.
-const LOG_MAX_BYTES = 2 * 1024 * 1024;
-let logFilePath = null;
-function logFile() {
-  if (logFilePath === null) {
-    try {
-      logFilePath = path.join(app.getPath('userData'), 'dastic.log');
-      if (fs.existsSync(logFilePath) && fs.statSync(logFilePath).size > LOG_MAX_BYTES) {
-        fs.renameSync(logFilePath, logFilePath + '.1');
-      }
-    } catch (e) { logFilePath = ''; }
-  }
-  return logFilePath;
-}
-function fileLog(line) {
-  const p = logFile();
-  if (!p) return;
-  try { fs.appendFileSync(p, line + String.fromCharCode(10)); } catch (e) {}
-}
-// Wrap the existing console calls rather than rewriting every log site.
-for (const level of ['log', 'warn', 'error']) {
-  const original = console[level].bind(console);
-  console[level] = (...args) => {
-    original(...args);
-    fileLog(args.map((a) => {
-      if (typeof a === 'string') return a;
-      try { return JSON.stringify(a); } catch (e) { return String(a); }
-    }).join(' '));
-  };
-}
+
 
 /**
  * Drag a window back onto the visible desktop.
