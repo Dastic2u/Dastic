@@ -282,7 +282,7 @@
     <div style="display:flex;align-items:center;gap:8px;">
       <select id="languageSelect" title="Language"
               style="background:#111827;color:#9ca3af;border:1px solid #1f2937;border-radius:6px;padding:5px 8px;font-size:0.82rem;"></select>
-      <button class="donate-btn" id="donateBtn" style="display:none;" onclick="showDonate()">☕ Buy martins a coffee</button>
+      <button class="donate-btn" id="donateBtn" style="display:none;" onclick="showDonate()" data-i18n="launcher.donate">☕ Buy martins a coffee</button>
     </div>
   </div>
 
@@ -296,7 +296,7 @@
   <!-- Donation Modal -->
   <div class="modal-overlay" id="donateModal">
     <div class="modal">
-      <h3>☕ Buy martins a coffee</h3>
+      <h3 data-i18n="launcher.donate">☕ Buy martins a coffee</h3>
       <p><span data-i18n="launcher.donateBody">Support development by sending NACKL to the address below. Click to copy.</span></p>
       <div class="copied" id="copiedText">✓ Copied to clipboard!</div>
       <div class="wallet-address" id="donateAddress" onclick="copyAddress()"></div>
