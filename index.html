@@ -405,6 +405,9 @@
         `;
         list.appendChild(card);
       });
+      console.log('[launcher] rendered ' + list.children.length + ' wallet card(s); ' +
+        'walletList found=' + !!list + ' visible=' + (list.offsetParent !== null) +
+        ' clientHeight=' + list.clientHeight);
     }
 
     function launchWallet(name) {

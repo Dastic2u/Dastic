@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, powerSaveBlocker } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, powerSaveBlocker, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -34,7 +34,24 @@ if (!app.requestSingleInstanceLock()) {
   console.warn('[launcher] Another instance already owns this profile — exiting. ' +
     'Two copies cannot share one data directory: the second gets an empty ' +
     'localStorage and would look like it had lost every wallet.');
-  app.quit();
+  // Say so on screen. Quitting silently is indistinguishable from the app
+  // failing to launch at all: double-click, nothing happens, and the copy
+  // already running may be behind another window or minimised to the tray.
+  // Reported as "I start the .bat and don't see my wallets" — the .bat was
+  // being refused by an instance the user could not see.
+  app.whenReady().then(() => {
+    dialog.showMessageBoxSync({
+      type: 'info',
+      title: 'Dastic is already running',
+      message: 'Dastic is already running.',
+      detail: 'Only one copy can run at a time, because they would share the same ' +
+        'data folder and the second would show an empty wallet list.\n\n' +
+        'Look for the existing window, or click the Dastic icon in the system tray ' +
+        '(bottom-right, near the clock).',
+      buttons: ['OK'],
+    });
+    app.quit();
+  });
 } else {
   app.on('second-instance', () => {
     if (launcherWindow) {
