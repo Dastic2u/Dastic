@@ -3321,6 +3321,18 @@
      * (contrast the empty-tree path, which passes `false, false` and does
      * `seeds_ref.borrow_mut().push_front(worker.seed.clone())`).
      *
+     * VERSION CAVEAT, measured 2026-08-22 against the INSTALLED
+     * @teamgosh/bee-sdk 4.0.0: that build never actually emits the
+     * "removed" event or this flag — a failed root submission produces
+     * status_updated{status:"finished"} and nothing more. The fields above
+     * are read from the CURRENT source on github.com/gosh-sh/bee-engine,
+     * which is ahead of 4.0.0. So this handler is correct but dormant here;
+     * what actually rescues a starved instance on 4.0.0 is the can_start()
+     * fallback in waitForEngineFree(), confirmed live rebuilding both of two
+     * concurrently-mining wallets after each lost a root to congestion.
+     * Keep both: the flag is the precise signal once the SDK ships it, the
+     * fallback is what works today.
+     *
      * This app read neither field. That is the actual bug behind every
      * "why do my taps never get past root": ONE congested
      * submit_session_root — the QUEUE_OVERFLOW this mainnet hands out
