@@ -48,3 +48,4 @@ Start-NacklePick.bat
 
 # Alternate electron-builder output dir
 build-out/
+build-out/

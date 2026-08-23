@@ -21,7 +21,16 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
-    }
+    },
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!build-out/**",
+      "!*.log",
+      "!*.bak-*",
+      "!check_*.js",
+      "!PROJECT_MEMORY.md"
+    ]
   },
   "dependencies": {
     "@teamgosh/bee-sdk": "latest"
