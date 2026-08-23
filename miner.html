@@ -967,7 +967,25 @@
     // re-read at the top of every burst, so a change takes effect on the
     // next burst (~15s) without interrupting the running session. The
     // config value is only the default for a wallet that never saved one.
-    const TAPS_PER_BURST_KEY = 'bee_taps_per_burst';
+    /**
+     * Per-wallet, like every other stored setting here.
+     *
+     * These two were the only settings keyed globally, and every miner window
+     * shares one localStorage origin (file://) — so with two wallets open,
+     * saving a value in one window silently overwrote the other's. Reported as
+     * "I set 1.5 and 3.5 and they still give the same tap interval": they did,
+     * because both wallets were reading whichever value was written last.
+     * migrateGlobalSetting() adopts any pre-existing global value the first
+     * time a wallet looks, so nobody's current setting is lost by this change.
+     */
+    function migrateGlobalSetting(oldKey, newKey) {
+      if (localStorage.getItem(newKey) !== null) return newKey;
+      const legacy = localStorage.getItem(oldKey);
+      if (legacy !== null) localStorage.setItem(newKey, legacy);
+      return newKey;
+    }
+    const TAPS_PER_BURST_KEY =
+      migrateGlobalSetting('bee_taps_per_burst', 'bee_taps_per_burst_' + WALLET_NAME);
     const TAPS_PER_BURST_MIN = 1;
 
     /**
@@ -3192,7 +3210,8 @@
     // want to force a wider gap than the auto derivation would ever choose
     // (it only ever shrinks toward TAP_SPACING_MIN_MS as batch size grows).
     // Stored in seconds (matches the settings input), read as ms.
-    const TAP_SPACING_KEY = 'bee_tap_spacing_secs';
+    const TAP_SPACING_KEY =
+      migrateGlobalSetting('bee_tap_spacing_secs', 'bee_tap_spacing_secs_' + WALLET_NAME);
     // Generous ceiling for an explicit override — not a contract or SDK
     // limit, just a sanity bound so a typo can't turn a burst into an
     // hours-long worker. 15s x 70 taps is a 1050s (~17.5min) worker, already
@@ -3201,6 +3220,16 @@
     const TAP_SPACING_USER_MAX_MS = 15000;
 
     /** null means "auto" — no override saved, or the field was cleared. */
+    // Diagnostic: reports the RAW stored string next to what it resolves to,
+    // so "the setting does nothing" can be answered from a log instead of
+    // guesswork — it distinguishes "never saved", "saved but rejected by
+    // validation", and "saved and honoured" from each other.
+    function describeTapSpacingSource() {
+      const stored = localStorage.getItem(TAP_SPACING_KEY);
+      const resolved = getCustomTapSpacingMs();
+      return `stored=${JSON.stringify(stored)} -> ${resolved === null ? 'AUTO' : (resolved / 1000) + 's'}`;
+    }
+
     function getCustomTapSpacingMs() {
       const stored = localStorage.getItem(TAP_SPACING_KEY);
       if (stored === null || stored === '') return null;
@@ -4439,6 +4468,7 @@
       // plannedTapsForBurst() while the loop paced from getTapsPerBurst(), so a
       // 30-tap worker issued 15 taps and the backlog could never drain.
       const spacingMs = tapSpacingFor(wantedTaps);
+      console.log('[BeeEngine] tap spacing source: ' + describeTapSpacingSource());
       // Ceiling is msLeft MINUS the settle/rearm/grace overhead, not raw
       // msLeft — a compute phase sized right up to the boundary leaves the
       // submission nowhere to actually settle before the session rolls over.
