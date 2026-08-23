@@ -21,6 +21,30 @@ const fs = require('fs');
   }
 })();
 
+// Only ever one instance against this profile.
+//
+// Chromium locks the userData directory, so a SECOND instance does not fail
+// loudly — it comes up with an empty localStorage and shows no wallets at
+// all, which reads exactly like "my wallets are gone". Diagnosed live
+// 2026-08-23 when a packaged build was opened while a source build was
+// already running: the data was intact the whole time, and the exe found it
+// immediately once it had the profile to itself. Refuse the second instance
+// and surface the first instead of silently showing an empty app.
+if (!app.requestSingleInstanceLock()) {
+  console.warn('[launcher] Another instance already owns this profile — exiting. ' +
+    'Two copies cannot share one data directory: the second gets an empty ' +
+    'localStorage and would look like it had lost every wallet.');
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (launcherWindow) {
+      if (launcherWindow.isMinimized()) launcherWindow.restore();
+      if (!launcherWindow.isVisible()) launcherWindow.show();
+      launcherWindow.focus();
+    }
+  });
+}
+
 // Electron derives userData from productName, so renaming the app to Dastic
 // would silently point it at a brand-new empty folder — losing the saved
 // pairing, mining keys and session data and forcing a re-pair. Pin it to the
