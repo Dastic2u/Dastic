@@ -321,17 +321,41 @@
     // demonstrably held two wallets. Logging what was actually read — and
     // surviving a corrupt value instead of throwing — turns "my wallets are
     // gone" into something answerable from a log.
+    /**
+     * The plain-file mirror is now AUTHORITATIVE, not a fallback.
+     *
+     * localStorage proved unreliable this session: its LevelDB store got its
+     * write-ahead log torn by repeated forced process kills during testing,
+     * and a corrupted LevelDB can hand different windows a different last
+     * -good value from the SAME key — reported live as the wallet list (and
+     * separately the language) coming back different between two launches of
+     * the identical app against the identical profile. A synchronous read of
+     * a small JSON file, written with one fs call, cannot end up in that
+     * state. localStorage is kept only as a same-tick cache so the rest of
+     * this file doesn't need to change, and is overwritten from the file on
+     * every load.
+     */
     let wallets = [];
     try {
-      const rawWallets = localStorage.getItem(STORAGE_KEY);
-      wallets = JSON.parse(rawWallets) || [];
-      if (!Array.isArray(wallets)) wallets = [];
-      console.log('[launcher] wallet list loaded: ' + wallets.length +
-        ' wallet(s) [' + wallets.map(function (w) { return w && w.name; }).join(', ') + ']' +
-        ' from key "' + STORAGE_KEY + '" (raw length ' +
-        (rawWallets === null ? 'null' : rawWallets.length) + ')');
+      const mirrored = ipcRenderer.sendSync('wallets:readMirrorSync');
+      if (Array.isArray(mirrored) && mirrored.length > 0) {
+        wallets = mirrored;
+        console.log('[launcher] wallet list loaded from the file mirror: ' + wallets.length +
+          ' wallet(s) [' + wallets.map(function (w) { return w && w.name; }).join(', ') + ']');
+      } else {
+        // Nothing in the file yet — true first run, or a pre-mirror install.
+        // Fall back to whatever localStorage has, ONE TIME, and the mirror
+        // gets seeded from it below so this branch is never needed again.
+        const rawWallets = localStorage.getItem(STORAGE_KEY);
+        wallets = JSON.parse(rawWallets) || [];
+        if (!Array.isArray(wallets)) wallets = [];
+        console.log('[launcher] file mirror was empty; loaded ' + wallets.length +
+          ' wallet(s) from localStorage instead (raw length ' +
+          (rawWallets === null ? 'null' : rawWallets.length) + ')');
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(wallets));
     } catch (e) {
-      console.error('[launcher] wallet list is corrupt and could not be parsed — ' +
+      console.error('[launcher] wallet list could not be loaded — ' +
         'starting empty rather than crashing the launcher:', e.message);
       wallets = [];
     }
@@ -533,11 +557,10 @@
 
     // Initial render
     renderWallets();
-    // Seed the mirror from a healthy load, or recover from it after an empty one.
+    // Keep the mirror current with whatever was actually loaded (a no-op
+    // when it was the source in the first place).
     if (wallets.length > 0) {
       ipcRenderer.invoke('wallets:writeMirror', wallets).catch(() => {});
-    } else {
-      restoreFromMirrorIfEmpty();
     }
   </script>
 </body>

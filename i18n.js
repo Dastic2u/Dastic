@@ -432,19 +432,56 @@ const ICONS = {
   'settings.language': '🌐',
 };
 
-const LANG_KEY = 'bee_language';
+const LANG_KEY = 'language';
 
+/**
+ * Backed by a plain JSON file in userData, not localStorage.
+ *
+ * See launcher.js's settingsFilePath() comment for why: this profile's
+ * LevelDB store was repeatedly torn by forced process kills during testing,
+ * and a corrupted LevelDB can hand different windows a different last-good
+ * value from the SAME key -- reported live as one window opening in Chinese
+ * and another in English off what is supposedly one shared setting. A
+ * synchronous main-process read/write against a small JSON file cannot end
+ * up in that state.
+ *
+ * sendSync is deliberate, not an oversight: currentLang() is called
+ * synchronously and often (every render, every t() call), and the payload
+ * is a handful of bytes, so the IPC round trip is not a real cost here.
+ */
+let ipcRendererRef = null;
+function ipc() {
+  if (ipcRendererRef === null) {
+    try { ipcRendererRef = require('electron').ipcRenderer; }
+    catch (e) { ipcRendererRef = false; }
+  }
+  return ipcRendererRef || null;
+}
+
+let cachedLang = null;
 function currentLang() {
+  if (cachedLang !== null) return cachedLang;
   try {
-    const saved = localStorage.getItem(LANG_KEY);
-    if (saved && STRINGS[saved]) return saved;
-  } catch (e) { /* localStorage unavailable - fall through to English */ }
-  return 'en';
+    const r = ipc();
+    if (r) {
+      const settings = r.sendSync('settings:getSync');
+      if (settings && STRINGS[settings[LANG_KEY]]) {
+        cachedLang = settings[LANG_KEY];
+        return cachedLang;
+      }
+    }
+  } catch (e) { /* fall through to English */ }
+  cachedLang = 'en';
+  return cachedLang;
 }
 
 function setLang(code) {
   if (!STRINGS[code]) return false;
-  try { localStorage.setItem(LANG_KEY, code); } catch (e) { return false; }
+  cachedLang = code; // update the in-process cache immediately
+  try {
+    const r = ipc();
+    if (r) r.invoke('settings:set', LANG_KEY, code).catch(() => {});
+  } catch (e) { return false; }
   return true;
 }
 

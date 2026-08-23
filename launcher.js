@@ -477,6 +477,18 @@ function walletsFilePath() {
   return path.join(app.getPath('userData'), 'wallets.json');
 }
 
+// Synchronous variant so the renderer can consult the file BEFORE its first
+// render, rather than painting from localStorage and then flickering to a
+// different list a tick later once an async read resolves.
+ipcMain.on('wallets:readMirrorSync', (event) => {
+  try {
+    const p = walletsFilePath();
+    if (!fs.existsSync(p)) { event.returnValue = []; return; }
+    const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+    event.returnValue = Array.isArray(parsed) ? parsed : [];
+  } catch (e) { event.returnValue = []; }
+});
+
 ipcMain.handle('wallets:readMirror', () => {
   try {
     const p = walletsFilePath();
@@ -509,6 +521,45 @@ ipcMain.handle('wallets:writeMirror', (event, list) => {
 ipcMain.handle('wallets:clearMirror', () => {
   try { fs.writeFileSync(walletsFilePath(), '[]'); return true; }
   catch (e) { return false; }
+});
+
+/**
+ * Small app-wide settings — currently just the language — as a plain file.
+ *
+ * localStorage (Chromium's LevelDB, inside the same profile as the wallet
+ * list) turned out to be unreliable this session: repeatedly force-killing
+ * the app while testing left its write-ahead log torn mid-write more than
+ * once (a fresh empty .log segment appeared after almost every kill), and a
+ * corrupted LevelDB can hand different opens a different last-good state --
+ * which is exactly "it shows Chinese for one launch and English for
+ * another, from the same profile, with no other explanation." A plain JSON
+ * file written with a single synchronous fs call cannot end up in that
+ * state the way an LSM-tree database recovering a torn log can.
+ */
+function settingsFilePath() {
+  return path.join(app.getPath('userData'), 'settings.json');
+}
+function readSettings() {
+  try {
+    const p = settingsFilePath();
+    if (!fs.existsSync(p)) return {};
+    const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+    return (parsed && typeof parsed === 'object') ? parsed : {};
+  } catch (e) { return {}; }
+}
+ipcMain.on('settings:getSync', (event) => {
+  event.returnValue = readSettings();
+});
+ipcMain.handle('settings:set', (event, key, value) => {
+  try {
+    const s = readSettings();
+    s[key] = value;
+    fs.writeFileSync(settingsFilePath(), JSON.stringify(s, null, 2));
+    return true;
+  } catch (e) {
+    console.warn('[launcher] Could not write settings:', e.message);
+    return false;
+  }
 });
 
 // IPC handlers
