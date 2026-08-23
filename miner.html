@@ -793,13 +793,11 @@
   </div>
 
   <div class="epoch-info">
-    <!-- The global tap window is chain-wide, so this figure matches what
-         every other Bee miner (including the official app) is showing at
-         the same moment — see refreshEpochInfo() for why. The daily epoch
-         below it is NOT global; it is anchored to this miner's own
-         epoch_start. -->
+    <!-- Wording is deliberately neutral in the UI (see refreshEpochInfo()
+         for what this timer is actually anchored to). The daily epoch below
+         it is a different clock, anchored to this miner's own epoch_start. -->
     <div class="epoch-row">
-      <span class="epoch-label">🌐 Global tap window resets in</span>
+      <span class="epoch-label">⏱️ Next tap window in</span>
       <span class="epoch-value" id="epochWindowReset">—</span>
     </div>
     <div class="epoch-row">
