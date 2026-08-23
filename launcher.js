@@ -78,6 +78,18 @@ for (const level of ['log', 'warn', 'error']) {
 // Only remove this alongside a real migration that copies the folder across.
 app.setPath('userData', path.join(app.getPath('appData'), 'NacklePick'));
 
+// Observed live 2026-08-23: a window painted solid black -- process alive,
+// DOM correctly built (the wallet-list log line confirmed both cards were
+// rendered), no crash or render-process-gone event, but nothing ever reached
+// the screen. That is the well-known Electron/Chromium GPU-compositor black-
+// window failure, not a data or layout bug; it tends to follow exactly the
+// kind of repeated hard process kills this app was subjected to during
+// testing, which can leave the GPU process/driver in a bad state. Disabling
+// hardware acceleration trades a little GPU-accelerated smoothness for a
+// renderer that always actually paints, which is the right trade for a
+// small settings/status UI like this one.
+app.disableHardwareAcceleration();
+
 // Which profile this process actually ended up on. "No wallets, and the UI is
 // back in English" is the signature of a DIFFERENT (empty) profile rather than
 // lost data -- the language lives in the same store as the wallet list, so
