@@ -279,7 +279,7 @@
         <p>Multi-wallet NACKL miner</p>
       </div>
     </div>
-    <button class="donate-btn" id="donateBtn" style="display:none;" onclick="showDonate()">☕ Buy the developer a coffee</button>
+    <button class="donate-btn" id="donateBtn" style="display:none;" onclick="showDonate()">☕ Buy martins a coffee</button>
   </div>
 
   <div class="wallet-list" id="walletList"></div>
@@ -292,7 +292,7 @@
   <!-- Donation Modal -->
   <div class="modal-overlay" id="donateModal">
     <div class="modal">
-      <h3>☕ Buy the developer a coffee</h3>
+      <h3>☕ Buy martins a coffee</h3>
       <p>Support development by sending NACKL to the address below. Click to copy.</p>
       <div class="copied" id="copiedText">✓ Copied to clipboard!</div>
       <div class="wallet-address" id="donateAddress" onclick="copyAddress()"></div>
@@ -434,11 +434,11 @@
       document.getElementById('donateModal').classList.remove('show');
       document.getElementById('copiedText').classList.remove('show');
     }
-    // Whoever ships a build can put their own address here. Left EMPTY in the
-    // published source on purpose: a hard-coded personal address would mean
-    // every install of this open-source app solicits donations to whoever
-    // happened to build it first. Empty hides the button entirely.
-    const DONATION_ADDRESS = '';
+    // Restored on instruction. NOTE: this is a real personal address and it
+    // ships to everyone who installs the app — that is the intent here, but it
+    // is the reason the constant exists rather than the value being inlined in
+    // three places. Set it to '' to hide the donate button entirely.
+    const DONATION_ADDRESS = '0:2467fee74a56046e9f2607822a6e5134a78657880095dac06b695cc9dc62658c';
 
     (function applyDonationVisibility() {
       const btn = document.getElementById('donateBtn');
