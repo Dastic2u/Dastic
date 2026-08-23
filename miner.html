@@ -796,7 +796,13 @@
     <!-- Wording is deliberately neutral in the UI (see refreshEpochInfo()
          for what this timer is actually anchored to). The daily epoch below
          it is a different clock, anchored to this miner's own epoch_start. -->
-    <div class="epoch-row">
+    <!-- Hidden on instruction: the app should not advertise that it aligns to
+         the chain-wide tap window. The element stays in the DOM (rather than
+         being deleted) so the countdown keeps being written to it and the
+         window clock keeps driving burst alignment exactly as before — only
+         the row is not shown. Deleting it would make renderWindow() a no-op
+         and silently unalign every session. -->
+    <div class="epoch-row" style="display:none;">
       <span class="epoch-label">⏱️ Next tap window in</span>
       <span class="epoch-value" id="epochWindowReset">—</span>
     </div>
@@ -2162,9 +2168,13 @@
     }
 
     function renderWindow() {
+      // Always computes the clock even though the row is hidden — the value
+      // is what burst alignment is built on, not just a label.
       const remainingMs = currentWindowRemainingMs();
-      document.getElementById('epochWindowReset').textContent =
-        remainingMs === null ? '—' : formatCountdown(remainingMs).replace(/^00:/, '');
+      const el = document.getElementById('epochWindowReset');
+      if (!el) return;
+      el.textContent = remainingMs === null
+        ? '—' : formatCountdown(remainingMs).replace(/^00:/, '');
     }
 
     function renderEpoch() {
