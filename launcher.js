@@ -41,6 +41,40 @@ const { registerBeeEngineIpc } = require('./bee-engine-main');
  * Elapsed-time questions about the mining flow are the main thing these logs
  * get read for, so the timestamp belongs on every line.
  */
+// In a packaged build there is no terminal, so every console.error below was
+// written to nowhere — which is exactly why "the screen goes blank" could be
+// reported but never diagnosed. Mirror everything to a file in userData,
+// rotated so it cannot grow without limit on a machine that mines all day.
+const LOG_MAX_BYTES = 2 * 1024 * 1024;
+let logFilePath = null;
+function logFile() {
+  if (logFilePath === null) {
+    try {
+      logFilePath = path.join(app.getPath('userData'), 'dastic.log');
+      if (fs.existsSync(logFilePath) && fs.statSync(logFilePath).size > LOG_MAX_BYTES) {
+        fs.renameSync(logFilePath, logFilePath + '.1');
+      }
+    } catch (e) { logFilePath = ''; }
+  }
+  return logFilePath;
+}
+function fileLog(line) {
+  const p = logFile();
+  if (!p) return;
+  try { fs.appendFileSync(p, line + String.fromCharCode(10)); } catch (e) {}
+}
+// Wrap the existing console calls rather than rewriting every log site.
+for (const level of ['log', 'warn', 'error']) {
+  const original = console[level].bind(console);
+  console[level] = (...args) => {
+    original(...args);
+    fileLog(args.map((a) => {
+      if (typeof a === 'string') return a;
+      try { return JSON.stringify(a); } catch (e) { return String(a); }
+    }).join(' '));
+  };
+}
+
 function logStamp() {
   const d = new Date();
   const p = (n, w = 2) => String(n).padStart(w, '0');
@@ -82,8 +116,23 @@ function createLauncher() {
     launcherWindow.focus();
   });
 
+  // A dead renderer leaves an empty window frame with no error and no way
+  // back — the reported "screen goes blank, only the mining windows left".
+  // Record why, then reload rather than leaving the user staring at nothing.
+  // 'clean-exit' is normal teardown, not a crash, so it is skipped.
   launcherWindow.webContents.on('render-process-gone', (event, details) => {
-    console.error('[launcher] RENDERER PROCESS GONE:', details.reason, details);
+    console.error(`[${logStamp()}][launcher] RENDERER PROCESS GONE: ${details.reason}` +
+      ` (exitCode ${details.exitCode}) — reloading the launcher.`);
+    if (details.reason === 'clean-exit') return;
+    setTimeout(() => {
+      if (launcherWindow && !launcherWindow.isDestroyed()) launcherWindow.reload();
+    }, 1000);
+  });
+  launcherWindow.webContents.on('unresponsive', () => {
+    console.error(`[${logStamp()}][launcher] Renderer became unresponsive`);
+  });
+  launcherWindow.webContents.on('did-fail-load', (event, code, desc) => {
+    console.error(`[${logStamp()}][launcher] Failed to load: ${code} ${desc}`);
   });
   launcherWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
     console.log(`[${logStamp()}][launcher][console:${level}] ${sourceId}:${line} ${message}`);
@@ -143,7 +192,16 @@ function createMinerWindow(walletName) {
   });
 
   minerWin.webContents.on('render-process-gone', (event, details) => {
-    console.error(`[${walletName}] RENDERER PROCESS GONE:`, details.reason, details);
+    console.error(`[${logStamp()}][${walletName}] RENDERER PROCESS GONE: ${details.reason}` +
+      ` (exitCode ${details.exitCode}) — reloading this miner window.`);
+    if (details.reason === 'clean-exit') return;
+    // The wallet is not mining once its renderer is gone; say so rather than
+    // leaving the tray showing green for a window that no longer exists.
+    if (walletData[walletName]) walletData[walletName].isMining = false;
+    updateTray();
+    setTimeout(() => {
+      if (minerWin && !minerWin.isDestroyed()) minerWin.reload();
+    }, 1500);
   });
   minerWin.webContents.on('unresponsive', () => {
     console.error(`[${walletName}] Renderer became unresponsive`);
