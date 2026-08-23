@@ -705,7 +705,7 @@
           box-sizing: border-box;
         ">
         <p class="connect-hint" style="margin-top:-6px;">The name you use to log into your Acki Nacki Wallet app.</p>
-        <button class="btn btn-start" style="width:100%;" onclick="beginWalletConnection()">🔗 Connect Wallet</button>
+        <button class="btn btn-start" style="width:100%;" onclick="beginWalletConnection()" data-i18n="connect.title">🔗 Connect Wallet</button>
       </div>
 
       <div id="connectPairing" style="display:none;">
@@ -740,24 +740,24 @@
     </div>
     <div class="stat-box">
       <div class="value" id="tapCount">0</div>
-      <div class="label">Taps On Chain This Session</div>
-      <div class="sub"><span id="totalTapCount">0</span> accepted all time</div>
+      <div class="label" data-i18n="stat.tapsThisSession">Taps On Chain This Session</div>
+      <div class="sub"><span id="totalTapCount">0</span> <span data-i18n="stat.acceptedAllTime">accepted all time</span></div>
     </div>
     <div class="stat-box">
       <div class="value" id="balanceDisplay" style="font-size:0.95rem;">—</div>
-      <div class="label">Locked Balance (NACKL)</div>
+      <div class="label" data-i18n="stat.lockedBalance">Locked Balance (NACKL)</div>
       <div class="sub" id="balanceSub">mined — locked</div>
     </div>
     <div class="stat-box">
       <div class="value" id="epochTapTotal">—</div>
-      <div class="label">Total Taps Per Epoch (Daily)</div>
-      <div class="sub" id="rewardSub">resets with the 24h epoch</div>
+      <div class="label" data-i18n="stat.tapsPerEpoch">Total Taps Per Epoch (Daily)</div>
+      <div class="sub" id="rewardSub" data-i18n="stat.resetsWithEpoch">resets with the 24h epoch</div>
     </div>
   </div>
 
   <div class="timer-display">
     <div class="time" id="timer">05:00</div>
-    <div class="label" id="timerLabel">Ready to mine</div>
+    <div class="label" id="timerLabel" data-i18n="mine.ready">Ready to mine</div>
     <!-- No "Queued" step. It is a real SDK status and updateEnginePhase() still
          uses it as the per-burst reset, but it was never observably on screen:
          the engine goes from queued to computing faster than a frame, so the
@@ -803,7 +803,7 @@
          the row is not shown. Deleting it would make renderWindow() a no-op
          and silently unalign every session. -->
     <div class="epoch-row" style="display:none;">
-      <span class="epoch-label">⏱️ Next tap window in</span>
+      <span class="epoch-label" data-i18n="epoch.nextWindow">⏱️ Next tap window in</span>
       <span class="epoch-value" id="epochWindowReset">—</span>
     </div>
     <div class="epoch-row">
@@ -818,7 +818,7 @@
            ~24.1-24.2h — genuinely close to a day, once fed the right
            constant. Still not labelled "Daily" outright: it's close to 24h,
            not exactly it, since block time isn't perfectly steady. -->
-      <span class="epoch-label">🗓️ Epoch resets in</span>
+      <span class="epoch-label" data-i18n="epoch.resetsIn">🗓️ Epoch resets in</span>
       <span class="epoch-value" id="epochDailyReset">—</span>
     </div>
     <!-- Only on screen while taps are owed. Hidden by renderTapBudget() otherwise,
@@ -827,7 +827,7 @@
       <span class="epoch-label">📥 Held for the network</span>
       <span class="epoch-value" id="backlogValue">—</span>
     </div>
-    <div class="epoch-note" id="epochNote">Waiting for the first on-chain epoch read…</div>
+    <div class="epoch-note" id="epochNote" data-i18n="epoch.waitingFirstRead">Waiting for the first on-chain epoch read…</div>
   </div>
 
   <!-- Hidden until showEngineStallWarning() fires. Distinct from the network
@@ -839,25 +839,30 @@
        recovery attempts instead, which is what's really failing. -->
   <div class="stall-banner" id="engineStallBanner" style="display:none;">
     <span id="engineStallText"></span>
-    <button onclick="reconnectWallet()">🔄 Reconnect Wallet</button>
+    <button onclick="reconnectWallet()" data-i18n="connect.reconnect">🔄 Reconnect Wallet</button>
   </div>
 
   <div class="controls">
-    <button class="btn btn-start" id="startBtn" onclick="startMiningManually()" style="display:none;">▶ Start Mining</button>
-    <button class="btn btn-stop" id="stopBtn" onclick="stopMining()" style="display:none;">⏹ Stop Mining</button>
-    <button class="btn btn-reconnect" id="reconnectBtn" onclick="reconnectWallet()">🔄 Reconnect Wallet</button>
+    <button class="btn btn-start" id="startBtn" onclick="startMiningManually()" style="display:none;" data-i18n="mine.start">▶ Start Mining</button>
+    <button class="btn btn-stop" id="stopBtn" onclick="stopMining()" style="display:none;" data-i18n="mine.stop">⏹ Stop Mining</button>
+    <button class="btn btn-reconnect" id="reconnectBtn" onclick="reconnectWallet()" data-i18n="connect.reconnect">🔄 Reconnect Wallet</button>
   </div>
 
   <div class="settings">
-    <h3>⚙️ Settings</h3>
+    <h3 data-i18n="settings.title">⚙️ Settings</h3>
 
     <div class="setting-row">
-      <label>🔐 Wallet Status</label>
-      <small style="color: #00ff88; font-size: 0.85rem;">✅ Connected to Mainnet</small>
+      <label data-i18n="settings.language">🌐 Language</label>
+      <select id="languageSelect"></select>
     </div>
 
     <div class="setting-row">
-      <label>⛏️ Taps per Burst</label>
+      <label data-i18n="connect.status">🔐 Wallet Status</label>
+      <small style="color: #00ff88; font-size: 0.85rem;" data-i18n="connect.connected">✅ Connected to Mainnet</small>
+    </div>
+
+    <div class="setting-row">
+      <label data-i18n="settings.tapsPerBurst">⛏️ Taps per Burst</label>
       <div class="taps-control">
         <!-- Ceiling is the session allowance (70), not 10: MAX_LEN_TAPS=10
              (contracts/mvsystem/modifiers/modifiers.sol in ackinacki/
@@ -876,7 +881,7 @@
     <div class="setting-hint" id="tapsPerBurstHint"></div>
 
     <div class="setting-row">
-      <label>⏱️ Seconds Between Taps</label>
+      <label data-i18n="settings.secondsBetweenTaps">⏱️ Seconds Between Taps</label>
       <div class="taps-control">
         <!-- Leave blank for auto (spreads the batch across the paid-for 60s
              worker floor, 1-3s apart depending on batch size — see
@@ -895,7 +900,7 @@
 
   <div class="history">
     <h3>
-      💰 Mining Payouts <span style="font-weight:400;opacity:.6;font-size:.8em;">this 24h epoch</span>
+      <span data-i18n="payout.title">💰 Mining Payouts</span> <span style="font-weight:400;opacity:.6;font-size:.8em;" data-i18n="payout.thisEpoch">this 24h epoch</span>
     </h3>
     <div class="sub" id="payoutSummary" style="opacity:.6;font-size:.8rem;margin:-4px 0 8px;">—</div>
     <div id="payoutList"></div>
@@ -915,6 +920,7 @@
 
     const BeeEngineMiner = require('./bee-engine-miner');
     const BEE_ENGINE_CONFIG = require('./bee-engine-config');
+    const { t, applyTranslations, buildLanguageSelect } = require('./i18n');
     // One table for the contract's exit codes, shared with bee-engine-miner.js so
     // the submit path and the reward path cannot drift into two readings of the
     // same number. They already had: 402 was "the window is spent" here and
@@ -1660,7 +1666,7 @@
       console.log(`[BeeEngine] Daily cap reached: ${epochTapsUsed()} of ${MAX_EPOCH_TAPS} taps on ` +
         'chain this epoch. Mining stops for this wallet until the epoch resets.');
       const label = document.getElementById('timerLabel');
-      if (label) label.textContent = `✅ Daily allowance filled — ${MAX_EPOCH_TAPS.toLocaleString()} taps`;
+      if (label) label.textContent = t('mine.capFilled', { taps: MAX_EPOCH_TAPS.toLocaleString() });
       if (mining) {
         sessionFinished = true;
         mining = false;
@@ -1679,9 +1685,9 @@
       const el = document.getElementById('rewardSub');
       if (!el) return;
       if (epochCapReached) {
-        el.textContent = 'daily cap reached — resumes at epoch reset';
+        el.textContent = t('stat.capReached');
       } else {
-        el.textContent = 'resets with the 24h epoch';
+        el.textContent = t('stat.resetsWithEpoch');
       }
     }
 
@@ -1799,7 +1805,7 @@
       if (!list) return;
       if (!rounds.length) {
         list.innerHTML = '<div style="opacity:.55;padding:10px 2px;font-size:.85rem;">' +
-          'No mining payouts yet this epoch.</div>';
+          t('payout.none') + '</div>';
         return;
       }
       // Grouped by calendar date, on instruction. A 24h epoch does not align
@@ -1893,7 +1899,7 @@
             ...(cursor ? { cursor } : {})
           });
           if (!hist.success) {
-            if (!all.length) { subEl.textContent = 'history unavailable'; return false; }
+            if (!all.length) { subEl.textContent = t('payout.unavailable'); return false; }
             break; // keep what we already have rather than blanking the panel
           }
           const rows = hist.data || [];
@@ -1911,7 +1917,7 @@
           : all.filter((t) => Number(t.created_at) * 1000 >= epochStartMs);
         renderPayoutList(rounds, epochStartMs === null);
         if (!rounds.length) {
-          subEl.textContent = all.length ? 'none yet this epoch' : 'no payouts yet';
+          subEl.textContent = all.length ? t('payout.noneThisEpoch') : t('payout.noneYet');
           return true;
         }
         // get_history returns newest first (confirmed: created_at descends
@@ -1929,7 +1935,7 @@
         return true;
       } catch (e) {
         console.warn('[BeeEngine] Mining rewards refresh failed:', e && e.message);
-        subEl.textContent = 'history unavailable';
+        subEl.textContent = t('payout.unavailable');
         return false;
       }
     }
@@ -2390,18 +2396,17 @@
       }
       if (networkFailStreak > 0) {
         box.classList.add('degraded');
-        text.textContent = `Network unstable — ${networkFailStreak} failed read` +
-          (networkFailStreak === 1 ? '' : 's') + ', retrying';
+        text.textContent = t('net.unstable', { count: networkFailStreak });
         return;
       }
       if (networkLastOkAt === null) {
-        text.textContent = 'Checking network…';
+        text.textContent = t('net.checking');
         return;
       }
       box.classList.add('up');
       text.textContent = tapBacklog > 0
         ? `Network stable — catching up ${plannedTapsForBurst()} taps`
-        : 'Network stable — mainnet responding';
+        : t('net.stable');
     }
 
     function noteNetworkResult(ok) {
@@ -3419,7 +3424,7 @@
       sessionFinished = true;
       clearInterval(timerInterval);
       beeEngine.stopMining({ force: true }).catch(() => {});
-      document.getElementById('timerLabel').textContent = '💀 Session timed out — starting fresh';
+      document.getElementById('timerLabel').textContent = t('mine.timedOut');
       document.getElementById('stopBtn').style.display = 'none';
       document.getElementById('startBtn').style.display = 'none';
       saveData();
@@ -3692,7 +3697,7 @@
           'leaving it to submit now that the node is answering.');
       }
       const label = document.getElementById('timerLabel');
-      if (label) label.textContent = '⛏️ Mining…';
+      if (label) label.textContent = t('mine.mining');
       if (burstHeldForNetwork) {
         burstHeldForNetwork = false;
         console.log('[BeeEngine] Releasing the burst that was held for the outage' +
@@ -3717,7 +3722,7 @@
       // fresh deadline rather than inheriting however much of an old one
       // elapsed during the wait.
       currentBurstDeadlineAt = null;
-      document.getElementById('timerLabel').textContent = '⛏️ Mining…';
+      document.getElementById('timerLabel').textContent = t('mine.mining');
       runBurst();
     }
 
@@ -3935,7 +3940,7 @@
         epochCapReached = true;
         const label = document.getElementById('timerLabel');
         if (label) {
-          label.textContent = `✅ Daily allowance filled — ${MAX_EPOCH_TAPS.toLocaleString()} taps`;
+          label.textContent = t('mine.capFilled', { taps: MAX_EPOCH_TAPS.toLocaleString() });
         }
         renderCapNotice();
         console.log(`[BeeEngine] Not starting a session: ${epochTapsUsed()}/${MAX_EPOCH_TAPS} taps ` +
@@ -4069,7 +4074,7 @@
 
       document.getElementById('stopBtn').style.display = 'inline-block';
       document.getElementById('startBtn').style.display = 'none';
-      document.getElementById('timerLabel').textContent = '⛏️ Mining…';
+      document.getElementById('timerLabel').textContent = t('mine.mining');
       setMinerMood('mining');
       document.getElementById('pickaxe').textContent = '⛏️';
 
@@ -4142,7 +4147,7 @@
       // of the window with nothing mining it. Wait for the clock instead.
       if (currentWindowRemainingMs() === null) {
         burstDeferred = true;
-        document.getElementById('timerLabel').textContent = '🌐 Syncing to the global tap window…';
+        document.getElementById('timerLabel').textContent = t('mine.syncing');
         // Gated on sessionGen: this valve outlives its session by design (45s),
         // and burstDeferred alone is not enough to identify whose valve it is.
         // A later session that also defers would otherwise be released early by
@@ -4374,7 +4379,7 @@
       // session or freeze its countdown. If it isn't free yet this returns
       // false having already re-scheduled itself.
       if (!(await waitForEngineFree())) return;
-      document.getElementById('timerLabel').textContent = '⛏️ Mining…';
+      document.getElementById('timerLabel').textContent = t('mine.mining');
 
       // Never start a burst that would run past the session deadline. In
       // window-aligned mode that overshoot is the whole thing we're trying
@@ -5561,7 +5566,7 @@
         const el = document.getElementById('pairingStatus');
         if (!el) return;
         if (leftMs <= 0) {
-          el.textContent = 'Still waiting on the wallet…';
+          el.textContent = t('connect.stillWaiting');
           stopPairingCountdown();
           return;
         }
@@ -5703,8 +5708,8 @@
       pairingView.style.display = 'block';
       document.getElementById('connectFailed').style.display = 'none';
       document.getElementById('pairingSpinner').style.display = 'block';
-      statusText.textContent = 'Connecting to Acki Nacki mainnet…';
-      pairingStatus.textContent = 'Generating mining keys…';
+      statusText.textContent = t('connect.connecting');
+      pairingStatus.textContent = t('connect.generatingKeys');
 
       try {
         // Initialize SDK
@@ -5733,7 +5738,7 @@
           qrBox.innerHTML = '<span style="color:#333;font-size:0.75rem;padding:8px;">QR unavailable — check console</span>';
         }
 
-        pairingStatus.textContent = 'Waiting for confirmation in your wallet…';
+        pairingStatus.textContent = t('connect.waitingWallet');
         // The propagation poll is bounded by MAX_ATTEMPTS x INTERVAL_MS.
         // Show that budget as a countdown rather than leaving the user
         // guessing how long they have to reach for their phone.
@@ -5824,7 +5829,7 @@
     function resetUI() {
       document.getElementById('stopBtn').style.display = 'none';
       document.getElementById('startBtn').style.display = 'inline-block';
-      document.getElementById('timerLabel').textContent = '💤 Idle';
+      document.getElementById('timerLabel').textContent = t('mine.idle');
       setMinerMood('sleeping');
       document.getElementById('pickaxe').textContent = '💤';
       remaining = 0;
@@ -5849,6 +5854,20 @@
       // Before the restore attempt, not after — the restore can spend six
       // minutes failing against a congested node, and the pill has to be live
       // and counting for all of it.
+      // Translate the static markup before anything else paints, then wire the
+      // picker. Re-rendering the dynamic panels on change means a language
+      // switch takes effect immediately rather than at the next poll.
+      applyTranslations();
+      buildLanguageSelect(document.getElementById('languageSelect'), () => {
+        applyTranslations();
+        renderTapsPerBurstHint();
+        renderTapSpacingHint();
+        renderTapBudget();
+        renderCapNotice();
+        renderNetStatus();
+        refreshMiningRewards();
+      });
+
       startNetTicker();
       startMiningRewardsTicker();
 
@@ -5898,7 +5917,7 @@
         document.getElementById('connectFailedText').textContent =
           'Could not reconnect to mainnet after several minutes. Your wallet is still paired — ' +
           'this is usually the previous session still settling on chain, or mainnet congestion.';
-        document.getElementById('connectStatusText').textContent = 'Reconnect failed.';
+        document.getElementById('connectStatusText').textContent = t('connect.failed');
       } else {
         console.log('[BeeEngine] Wallet not yet connected to mainnet.');
         showConnectGate();

@@ -276,32 +276,37 @@
       <div class="logo">🐝</div>
       <div>
         <h1>Dastic</h1>
-        <p>Multi-wallet NACKL miner</p>
+        <p data-i18n="app.tagline">Multi-wallet NACKL miner</p>
       </div>
     </div>
-    <button class="donate-btn" id="donateBtn" style="display:none;" onclick="showDonate()">☕ Buy martins a coffee</button>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <select id="languageSelect" title="Language"
+              style="background:#111827;color:#9ca3af;border:1px solid #1f2937;border-radius:6px;padding:5px 8px;font-size:0.82rem;"></select>
+      <button class="donate-btn" id="donateBtn" style="display:none;" onclick="showDonate()">☕ Buy martins a coffee</button>
+    </div>
   </div>
 
   <div class="wallet-list" id="walletList"></div>
 
   <div class="add-wallet" id="addWalletSection">
-    <input type="text" id="newWalletName" placeholder="Enter wallet name..." maxlength="20">
-    <button class="btn-add" onclick="addWallet()">+ Add Wallet</button>
+    <input type="text" id="newWalletName" placeholder="Enter wallet name..." data-i18n-placeholder="launcher.walletNamePlaceholder" maxlength="20">
+    <button class="btn-add" onclick="addWallet()" data-i18n="launcher.addWallet">+ Add Wallet</button>
   </div>
 
   <!-- Donation Modal -->
   <div class="modal-overlay" id="donateModal">
     <div class="modal">
       <h3>☕ Buy martins a coffee</h3>
-      <p>Support development by sending NACKL to the address below. Click to copy.</p>
+      <p><span data-i18n="launcher.donateBody">Support development by sending NACKL to the address below. Click to copy.</span></p>
       <div class="copied" id="copiedText">✓ Copied to clipboard!</div>
       <div class="wallet-address" id="donateAddress" onclick="copyAddress()"></div>
-      <button class="close-btn" onclick="hideDonate()">Close</button>
+      <button class="close-btn" onclick="hideDonate()" data-i18n="launcher.close">Close</button>
     </div>
   </div>
 
   <script>
     const { ipcRenderer } = require('electron');
+    const { t, applyTranslations, buildLanguageSelect } = require('./i18n');
 
     window.addEventListener('error', (e) => {
       ipcRenderer.send('renderer-error', { source: 'index.html', message: e.message, stack: e.error?.stack });
@@ -318,6 +323,15 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(wallets));
     }
 
+    // Static markup first, then the picker. renderWallets() is re-run on
+    // change because the wallet cards are built as HTML strings and so are not
+    // reachable by applyTranslations()' data-i18n sweep.
+    applyTranslations();
+    buildLanguageSelect(document.getElementById('languageSelect'), () => {
+      applyTranslations();
+      renderWallets();
+    });
+
     function renderWallets() {
       const list = document.getElementById('walletList');
       list.innerHTML = '';
@@ -326,8 +340,8 @@
         list.innerHTML = `
           <div style="text-align:center; color:#666; padding: 30px 10px;">
             <div style="font-size:2rem; margin-bottom:8px;">🐝</div>
-            <div style="font-size:0.95rem;">No wallets yet</div>
-            <div style="font-size:0.8rem; margin-top:4px;">Add a wallet below to get started</div>
+            <div style="font-size:0.95rem;">' + t('launcher.noWallets') + '</div>
+            <div style="font-size:0.8rem; margin-top:4px;">' + t('launcher.addPrompt') + '</div>
           </div>
         `;
         return;
@@ -338,7 +352,7 @@
         card.className = 'wallet-card' + (wallet.isMining ? ' mining' : '');
         card.id = 'card-' + wallet.name;
 
-        const statusText = wallet.isMining ? '⛏️ Mining' : '💤 Idle';
+        const statusText = wallet.isMining ? t('launcher.mining') : t('launcher.idle');
         const stopHidden = wallet.isMining ? '' : 'btn-hidden';
 
         // The miner window reports balance as an already-formatted NACKL

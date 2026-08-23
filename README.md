@@ -24,6 +24,17 @@ reports what actually landed on chain rather than what it hoped would land.
 - **Locked balance.** Mined NACKL accrues to your wallet's *locked* balance, so
   that is the headline figure, with the spendable balance shown beneath it.
 
+## Languages
+
+English, Русский, 中文 and Español. Pick one from the selector in the launcher
+header or in a miner window's Settings; the choice applies everywhere and
+persists. Console and diagnostic logs stay in English on purpose — they are the
+main tool for diagnosing a problem remotely, and a log the maintainer cannot
+read is worse than no log.
+
+Adding a language means one new block in `i18n.js`; anything left untranslated
+falls back to English rather than showing a raw key.
+
 ## Requirements
 
 - Windows (the build target; the code itself is not Windows-specific)
