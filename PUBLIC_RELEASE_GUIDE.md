@@ -263,7 +263,7 @@ git add .
 git commit -m "Initial commit: Dastic Bee Engine Miner"
 
 # Add remote
-git remote add origin https://github.com/YOUR_USERNAME/nacklepick-miner.git
+git remote add origin https://github.com/YOUR_USERNAME/dastic.git
 
 # Push
 git branch -M main
@@ -282,7 +282,7 @@ gh release create v1.0.0 \
 ```
 
 **Option B: Via GitHub Web Interface**
-1. Go to your repo: `https://github.com/YOUR_USERNAME/nacklepick-miner`
+1. Go to your repo: `https://github.com/YOUR_USERNAME/dastic`
 2. Click "Releases" → "Create a new release"
 3. Tag: `v1.0.0`
 4. Title: `Dastic v1.0.0`
@@ -300,7 +300,7 @@ Multi-wallet NACKL desktop miner with Bee Engine integration.
 
 ## Download
 
-[⬇️ Download Latest Release](https://github.com/YOUR_USERNAME/nacklepick-miner/releases)
+[⬇️ Download Latest Release](https://github.com/YOUR_USERNAME/dastic/releases)
 
 ## Quick Start
 
