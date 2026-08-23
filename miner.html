@@ -1232,7 +1232,15 @@
      * never register more than MAX_SESSION_TAPS.
      */
     function plannedTapsForBurst() {
-      const room = sessionTapsLeft();
+      // Two ceilings apply, and the tighter one wins: what is left of THIS
+      // session's 70-tap allowance, and what is left of the DAY's 12,000.
+      // Clamping here rather than only stopping at the cap is what keeps the
+      // epoch total from overshooting — the chain's tap_sum is only re-read
+      // every couple of minutes, so a burst sized purely by session room
+      // could push past 12,000 before the next read ever noticed.
+      let room = sessionTapsLeft();
+      const used = epochTapsUsed();
+      if (used !== null) room = Math.min(room, Math.max(0, MAX_EPOCH_TAPS - used));
       // Nothing left to ask for. runBurst() gates on the allowance before it
       // gets here, so this is only ever read by the UI and the log lines.
       if (room <= 0) return 0;
@@ -1604,6 +1612,48 @@
      * (filtered by epoch start) reset themselves and are not touched here.
      */
     let currentEpochKey = localStorage.getItem('bee_epoch_key_' + WALLET_NAME) || null;
+    /**
+     * Stop this wallet the moment the chain says it has taken its daily
+     * allowance, and leave it stopped until the epoch rolls over.
+     *
+     * Deliberately does NOT touch miningEnabled: that flag records what the
+     * USER asked for (Start/Stop), and a cap pause must not silently look
+     * like the user stopped mining — otherwise the epoch rollover would have
+     * no way to tell "resume, the cap lifted" from "stay off, they stopped
+     * it". The cap is its own latch.
+     */
+    function enforceEpochCap() {
+      if (!epochCapHit()) return;
+      if (epochCapReached) return;            // already handled this epoch
+      epochCapReached = true;
+      console.log(`[BeeEngine] Daily cap reached: ${epochTapsUsed()} of ${MAX_EPOCH_TAPS} taps on ` +
+        'chain this epoch. Mining stops for this wallet until the epoch resets.');
+      const label = document.getElementById('timerLabel');
+      if (label) label.textContent = `✅ Daily allowance filled — ${MAX_EPOCH_TAPS.toLocaleString()} taps`;
+      if (mining) {
+        sessionFinished = true;
+        mining = false;
+        currentBurstDeadlineAt = null;
+        cancelBurstRetry();
+        clearInterval(timerInterval);
+        beeEngine.stopMining({ force: true }).catch(() => {});
+        saveData();
+        updateDisplay();
+        sendStatus();
+      }
+      renderCapNotice();
+    }
+
+    function renderCapNotice() {
+      const el = document.getElementById('rewardSub');
+      if (!el) return;
+      if (epochCapReached) {
+        el.textContent = 'daily cap reached — resumes at epoch reset';
+      } else {
+        el.textContent = 'resets with the 24h epoch';
+      }
+    }
+
     function checkEpochRollover(epochStartRaw) {
       if (epochStartRaw == null) return;
       const key = String(epochStartRaw);
@@ -1617,6 +1667,16 @@
       }
       console.log(`[BeeEngine] Daily epoch rolled over (${previous} → ${key}) — clearing session ` +
         'history and epoch counters; a new 24h epoch starts from zero.');
+      // The whole point of the latch: a new epoch means a fresh 12,000 and
+      // mining resumes on its own, with the counter back at zero.
+      if (epochCapReached) {
+        epochCapReached = false;
+        console.log('[BeeEngine] New daily epoch — the tap cap is lifted, resuming mining.');
+        if (miningEnabled && !mining && !notOwnerRefused) {
+          setTimeout(() => { if (miningEnabled && !mining) startMining(); }, 2000);
+        }
+      }
+      renderCapNotice();
       historyItems = [];
       totalTaps = 0;
       sessionsCompleted = 0;
@@ -1677,6 +1737,31 @@
     const HISTORY_PAGE_SIZE = 50;
     const HISTORY_MAX_PAGES = 6;   // up to 300 payouts — beyond any real day
     const PAYOUT_ROWS_SHOWN = 30;
+
+    /**
+     * Daily tap ceiling for one wallet, on instruction: stop at 12,000 taps
+     * per 24h epoch and resume when the epoch resets.
+     *
+     * Enforced against the CHAIN's tap_sum, not a locally-counted total.
+     * tap_sum is what the contract itself resets every MinerTapDelay blocks,
+     * so the counter cannot drift from what the chain believes, cannot be
+     * inflated by taps that were computed but never accepted, and survives a
+     * restart mid-epoch. A local tally would fail all three.
+     */
+    const MAX_EPOCH_TAPS = 12000;
+    // Latched when the ceiling is hit so the burst chain stops arming new
+    // sessions. Cleared only by a real epoch rollover (checkEpochRollover).
+    let epochCapReached = false;
+
+    function epochTapsUsed() {
+      return lastTapSum === null ? null : Number(lastTapSum);
+    }
+
+    /** True once this wallet has taken its full daily allowance. */
+    function epochCapHit() {
+      const used = epochTapsUsed();
+      return used !== null && used >= MAX_EPOCH_TAPS;
+    }
 
     function renderPayoutList(rounds, unscoped) {
       const list = document.getElementById('payoutList');
@@ -2437,7 +2522,14 @@
       // resets it every MinerTapDelay blocks, so it clears itself on the
       // epoch boundary with no client-side bookkeeping.
       const epochTapEl = document.getElementById('epochTapTotal');
-      if (epochTapEl) epochTapEl.textContent = lastTapSum === null ? '—' : lastTapSum.toString();
+      if (epochTapEl) {
+        epochTapEl.textContent = lastTapSum === null
+          ? '—'
+          : `${lastTapSum.toString()} / ${MAX_EPOCH_TAPS.toLocaleString()}`;
+      }
+      // Enforced here because this is the only place the chain's own tap_sum
+      // arrives — checking anywhere else would be checking a copy.
+      enforceEpochCap();
       reconcileLedgerAgainstChain();
 
       // Free cross-check on the block time, since miner data is already
@@ -3789,6 +3881,21 @@
 
     async function startMining() {
       if (mining) return;
+
+      // A session started now would compute taps the contract will not
+      // accept, burn a seed and a submission slot, and report failures that
+      // look like congestion. Refuse until the epoch resets.
+      if (epochCapHit()) {
+        epochCapReached = true;
+        const label = document.getElementById('timerLabel');
+        if (label) {
+          label.textContent = `✅ Daily allowance filled — ${MAX_EPOCH_TAPS.toLocaleString()} taps`;
+        }
+        renderCapNotice();
+        console.log(`[BeeEngine] Not starting a session: ${epochTapsUsed()}/${MAX_EPOCH_TAPS} taps ` +
+          'already on chain this epoch. Waiting for the epoch to reset.');
+        return;
+      }
 
       // The connect gate guarantees the wallet is paired before this UI is
       // reachable. If the connection was somehow lost, send the user back
