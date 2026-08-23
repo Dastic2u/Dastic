@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, powerSaveBlocker, dialog } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, powerSaveBlocker, dialog, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -20,6 +20,22 @@ const fs = require('fs');
     }
   }
 })();
+
+// ORDER MATTERS: userData is pinned BEFORE requesting the single-instance
+// lock, because Electron derives that lock from the userData path. With the
+// lock taken first, the source build and the installed build were still on
+// their own default paths, got two DIFFERENT locks, and both ran happily
+// against the same folder once this pin applied a few lines later. The second
+// one then found the profile locked by Chromium and came up with an empty
+// localStorage -- "no wallets showing", with the data perfectly intact on
+// disk. Diagnosed live 2026-08-23 after the same report three times.
+
+// Electron derives userData from productName, so renaming the app to Dastic
+// would silently point it at a brand-new empty folder — losing the saved
+// pairing, mining keys and session data and forcing a re-pair. Pin it to the
+// original folder so the rename stays cosmetic. Must run before whenReady().
+// Only remove this alongside a real migration that copies the folder across.
+app.setPath('userData', path.join(app.getPath('appData'), 'NacklePick'));
 
 // Only ever one instance against this profile.
 //
@@ -61,13 +77,6 @@ if (!app.requestSingleInstanceLock()) {
     }
   });
 }
-
-// Electron derives userData from productName, so renaming the app to Dastic
-// would silently point it at a brand-new empty folder — losing the saved
-// pairing, mining keys and session data and forcing a re-pair. Pin it to the
-// original folder so the rename stays cosmetic. Must run before whenReady().
-// Only remove this alongside a real migration that copies the folder across.
-app.setPath('userData', path.join(app.getPath('appData'), 'NacklePick'));
 
 const { registerBeeEngineIpc } = require('./bee-engine-main');
 
@@ -116,6 +125,51 @@ for (const level of ['log', 'warn', 'error']) {
   };
 }
 
+/**
+ * Drag a window back onto the visible desktop.
+ *
+ * Observed live 2026-08-23: the launcher opened with only a few pixels of its
+ * title bar above the bottom edge of the screen -- the app was running
+ * normally and had rendered both wallet cards, but the window was effectively
+ * invisible, which reads exactly like "the app doesn't show my wallets".
+ * Windows can place or restore a window outside the work area (display
+ * changes, scaling changes, a stale position), and nothing recovers from it
+ * on its own because the user cannot grab a title bar they cannot see.
+ *
+ * Checks against the work area of whichever display the window is nearest,
+ * so a legitimate second-monitor position is left alone.
+ */
+function ensureOnScreen(win, label) {
+  if (!win || win.isDestroyed()) return;
+  try {
+    const b = win.getBounds();
+    const area = screen.getDisplayMatching(b).workArea;
+    console.log('[launcher] ' + (label || 'window') + ' bounds=' + JSON.stringify(b) +
+      ' workArea=' + JSON.stringify(area));
+    // Measure how much of the window actually lands on the desktop, rather
+    // than checking an edge margin. A first attempt required only 80px of the
+    // window to be inside the work area, and a launcher sitting with ~50px
+    // showing above the taskbar passed that test while being unusable. What
+    // matters is the visible FRACTION: anything under two thirds on screen is
+    // something the user cannot comfortably read or drag.
+    const visibleW = Math.max(0, Math.min(b.x + b.width,  area.x + area.width)  - Math.max(b.x, area.x));
+    const visibleH = Math.max(0, Math.min(b.y + b.height, area.y + area.height) - Math.max(b.y, area.y));
+    const visibleFraction = (visibleW * visibleH) / Math.max(1, b.width * b.height);
+    if (visibleFraction >= 0.67) return;
+    const width = Math.min(b.width, area.width);
+    const height = Math.min(b.height, area.height);
+    win.setBounds({
+      width, height,
+      x: Math.round(area.x + (area.width - width) / 2),
+      y: Math.round(area.y + (area.height - height) / 2),
+    });
+    console.warn('[launcher] Window was off-screen at ' + JSON.stringify(b) +
+      ' - recentred on the visible desktop.');
+  } catch (e) {
+    console.warn('[launcher] Could not verify window position:', e.message);
+  }
+}
+
 function logStamp() {
   const d = new Date();
   const p = (n, w = 2) => String(n).padStart(w, '0');
@@ -153,6 +207,7 @@ function createLauncher() {
     // never had OS foreground focus (e.g. launched from a background
     // shell). Force it visible and focused so it's never invisibly stuck.
     if (launcherWindow.isMinimized()) launcherWindow.restore();
+    ensureOnScreen(launcherWindow, 'launcher');
     launcherWindow.show();
     launcherWindow.focus();
   });
@@ -228,6 +283,7 @@ function createMinerWindow(walletName) {
 
   minerWin.once('ready-to-show', () => {
     if (minerWin.isMinimized()) minerWin.restore();
+    ensureOnScreen(minerWin, 'miner:' + walletName);
     minerWin.show();
     minerWin.focus();
   });
