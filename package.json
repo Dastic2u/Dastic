@@ -33,7 +33,7 @@
     ]
   },
   "dependencies": {
-    "@teamgosh/bee-sdk": "latest"
+    "@teamgosh/bee-sdk": "^5.0.0"
   },
   "devDependencies": {
     "electron": "^31.0.0",
