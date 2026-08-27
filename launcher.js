@@ -595,6 +595,58 @@ ipcMain.handle('wallets:clearMirror', () => {
 });
 
 /**
+ * Per-wallet pairing mirror — mining keys, miner address, AN wallet name —
+ * on the exact same reasoning as wallets.json above, extended to the data
+ * that actually matters more: without it, a miner window has no pairing at
+ * all and shows the first-time "Connect to Acki Nacki Mainnet" screen for a
+ * wallet that has been mining for weeks.
+ *
+ * Reproduced live 2026-08-27: two ALREADY-PAIRED wallets, mining moments
+ * before, both landed on the pairing gate on the very next launch. Checked
+ * directly against the LevelDB store on disk at that exact moment —
+ * bee_mining_keys_martins and bee_mining_keys_rahmita were both there,
+ * intact. localStorage.getItem() returned null anyway, in the running
+ * process, for both. Same failure class as the wallet list, on data whose
+ * absence is far more disruptive than an empty launcher screen.
+ *
+ * One file per wallet rather than one shared file: pairing data includes a
+ * secret key, and there's no reason for every wallet's file to need touching
+ * whenever any single one re-pairs.
+ */
+function pairingFilePath(walletName) {
+  const safe = String(walletName || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+  return path.join(app.getPath('userData'), `pairing_${safe}.json`);
+}
+
+ipcMain.on('pairing:readSync', (event, walletName) => {
+  try {
+    const p = pairingFilePath(walletName);
+    if (!fs.existsSync(p)) {
+      event.returnValue = null;
+      return;
+    }
+    const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+    console.log(`[launcher] pairing:readSync(${walletName}) -> found, keys present=` +
+      `${!!(parsed && parsed.miningKeys)}`);
+    event.returnValue = parsed;
+  } catch (e) {
+    console.error(`[launcher] pairing:readSync(${walletName}) FAILED: ${e.message}`);
+    event.returnValue = null;
+  }
+});
+
+ipcMain.handle('pairing:write', (event, walletName, data) => {
+  try {
+    if (!walletName || !data) return false;
+    fs.writeFileSync(pairingFilePath(walletName), JSON.stringify(data, null, 2));
+    return true;
+  } catch (e) {
+    console.warn(`[launcher] pairing:write(${walletName}) failed: ${e.message}`);
+    return false;
+  }
+});
+
+/**
  * Small app-wide settings — currently just the language — as a plain file.
  *
  * localStorage (Chromium's LevelDB, inside the same profile as the wallet

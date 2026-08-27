@@ -57,6 +57,24 @@ class BeeEngineMiner {
     return this.useTestnet ? BEE_ENGINE_CONFIG.TESTNET_ENDPOINTS : BEE_ENGINE_CONFIG.ENDPOINTS;
   }
 
+  /**
+   * Write the current pairing to the file mirror, best-effort.
+   *
+   * Fire-and-forget on purpose: the localStorage.setItem() calls right
+   * before every call site already give the app a working copy for this
+   * session immediately, synchronously. This is the durability layer for
+   * the NEXT launch, and a failed write here shouldn't block anything the
+   * user is doing right now.
+   */
+  _syncPairingMirror() {
+    if (!this.walletName || !this.miningKeys || !this.minerAddress) return;
+    ipcRenderer.invoke('pairing:write', this.walletName, {
+      miningKeys: this.miningKeys,
+      minerAddress: this.minerAddress,
+      anWalletName: this.anWalletName || null,
+    }).catch(() => {});
+  }
+
   async initialize(walletName, useTestnet = false) {
     this.walletName = walletName;
     this.useTestnet = useTestnet;
@@ -72,6 +90,10 @@ class BeeEngineMiner {
 
       this.miningKeys = { public: result.public, secret: result.secret, generatedAt: Date.now() };
       localStorage.setItem(BEE_ENGINE_CONFIG.STORAGE.MINING_KEYS + this.walletName, JSON.stringify(this.miningKeys));
+      // See launcher.js's pairingFilePath() comment: localStorage alone has
+      // proven unreliable for this on this machine, and losing pairing data
+      // is far more disruptive than losing the launcher's wallet list was.
+      this._syncPairingMirror();
 
       return { success: true, deepLink: result.deepLink, public: result.public, message: 'Mining keys generated. User must confirm in AN Wallet.' };
     } catch (error) {
@@ -100,6 +122,7 @@ class BeeEngineMiner {
       this.minerAddress = result.minerAddress;
       localStorage.setItem(BEE_ENGINE_CONFIG.STORAGE.MINER_ADDRESS + this.walletName, this.minerAddress);
       localStorage.setItem(BEE_ENGINE_CONFIG.STORAGE.AN_WALLET_NAME + this.walletName, anWalletName);
+      this._syncPairingMirror();
 
       this.isAuthorized = true;
       // A fresh pairing IS the ownership check: waitForKeyPropagation does not
@@ -599,13 +622,34 @@ class BeeEngineMiner {
    */
   async restoreAuthorization(walletName) {
     try {
-      const keysKey = BEE_ENGINE_CONFIG.STORAGE.MINING_KEYS + walletName;
-      const addressKey = BEE_ENGINE_CONFIG.STORAGE.MINER_ADDRESS + walletName;
-      const anWalletKey = BEE_ENGINE_CONFIG.STORAGE.AN_WALLET_NAME + walletName;
+      // The file mirror is authoritative, not a fallback — same reasoning as
+      // the launcher's wallet list (see launcher.js's pairingFilePath()
+      // comment): reproduced live, an already-paired wallet reading null
+      // from localStorage.getItem() while the exact same key sat intact in
+      // the LevelDB store on disk at that moment. sendSync so this resolves
+      // before anything downstream can act on a still-loading pairing.
+      let keys = null, address = null, anWalletName = null;
+      try {
+        const mirrored = ipcRenderer.sendSync('pairing:readSync', walletName);
+        if (mirrored && mirrored.miningKeys && mirrored.minerAddress) {
+          keys = JSON.stringify(mirrored.miningKeys);
+          address = mirrored.minerAddress;
+          anWalletName = mirrored.anWalletName || null;
+        }
+      } catch (e) { /* fall through to localStorage below */ }
 
-      const keys = localStorage.getItem(keysKey);
-      const address = localStorage.getItem(addressKey);
-      const anWalletName = localStorage.getItem(anWalletKey);
+      if (!keys || !address) {
+        // Nothing in the file yet — true first pairing, or a pre-mirror
+        // install. Falls back to localStorage ONE TIME; the write sites
+        // (generateMiningKeys / waitForKeyPropagation) seed the mirror going
+        // forward so this branch stops being needed after the first read.
+        const keysKey = BEE_ENGINE_CONFIG.STORAGE.MINING_KEYS + walletName;
+        const addressKey = BEE_ENGINE_CONFIG.STORAGE.MINER_ADDRESS + walletName;
+        const anWalletKey = BEE_ENGINE_CONFIG.STORAGE.AN_WALLET_NAME + walletName;
+        keys = localStorage.getItem(keysKey);
+        address = localStorage.getItem(addressKey);
+        anWalletName = localStorage.getItem(anWalletKey);
+      }
 
       if (!keys || !address) {
         return { success: false, error: 'No saved pairing found' };
@@ -615,6 +659,10 @@ class BeeEngineMiner {
       this.anWalletName = anWalletName;
       this.miningKeys = JSON.parse(keys);
       this.minerAddress = address;
+      // Keep the mirror current with whatever was actually loaded — a no-op
+      // when it was the source in the first place, and backfills it on the
+      // one-time localStorage fallback above.
+      this._syncPairingMirror();
 
       const result = await ipcRenderer.invoke('bee:rebuildMinerInstance', {
         sessionKey: this.walletName,
