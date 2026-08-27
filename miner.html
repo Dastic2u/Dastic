@@ -5910,9 +5910,44 @@
           BEE_ENGINE_CONFIG.MINING.MAX_ATTEMPTS * BEE_ENGINE_CONFIG.MINING.INTERVAL_MS
         );
 
-        // Poll the Miner contract until the mining key is propagated
+        /**
+         * Poll the Miner contract until the mining key is propagated —
+         * tolerating congestion, not just the wallet not answering.
+         *
+         * Reported live, repeatedly: pairing a wallet that has mined before
+         * failed with "Pairing didn't complete", the actual cause buried in
+         * the error being QUEUE_OVERFLOW / "Message queue is full" on
+         * Miner.new()'s internal "Cancel stale session data" step — the
+         * exact same congestion this app treats as routinely retryable
+         * everywhere else (the reconnect flow gets RESTORE_MAX_ATTEMPTS=12
+         * attempts at this). This call site had none at all: one shed
+         * message and the user was told to re-scan a QR code for a problem
+         * that had nothing to do with the QR code. re-pairing an ALREADY-
+         * mining wallet is common (this app resolves the SAME existing
+         * miner account for the wallet name, so it always has a stale
+         * session Miner.new() needs to clear first) — congestion on that one
+         * setup step should not cost the user a fresh scan.
+         *
+         * Deliberately does NOT retry a genuine "wallet never confirmed" —
+         * that needs the user to actually scan, and retrying it silently
+         * would just restate the same countdown without them knowing why.
+         */
+        const PAIRING_CONGESTION_RETRIES = 4;
+        const PAIRING_CONGESTION_RETRY_MS = 8000;
         const pubKey = keysResult.public;
-        const propResult = await beeEngine.waitForKeyPropagation(anWalletName, pubKey);
+        let propResult = null;
+        for (let attempt = 1; attempt <= PAIRING_CONGESTION_RETRIES; attempt++) {
+          propResult = await beeEngine.waitForKeyPropagation(anWalletName, pubKey);
+          if (propResult.success) break;
+          const congested = isCongestion(propResult.error || '');
+          if (!congested || attempt === PAIRING_CONGESTION_RETRIES) break;
+          console.warn(`[BeeEngine] Pairing hit congestion (attempt ${attempt}/` +
+            `${PAIRING_CONGESTION_RETRIES}): ${propResult.error}. Retrying — this is mainnet load, ` +
+            'not the QR code or the wallet.');
+          pairingStatus.textContent = `Mainnet is busy — retrying (${attempt}/` +
+            `${PAIRING_CONGESTION_RETRIES})…`;
+          await new Promise((resolve) => setTimeout(resolve, PAIRING_CONGESTION_RETRY_MS));
+        }
         stopPairingCountdown();
         if (!propResult.success) {
           throw new Error(propResult.error || 'Wallet did not confirm in time');
