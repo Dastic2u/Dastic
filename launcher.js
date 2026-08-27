@@ -229,7 +229,48 @@ function createLauncher() {
   });
 
   launcherWindow.setMenu(null);
-  launcherWindow.loadFile('index.html');
+
+  // Read the wallet list and settings directly here, in the main process, at
+  // the one moment they are least likely to race anything: nothing else has
+  // touched this profile yet for THIS launch. Passed to the page via its own
+  // load, not fetched later over IPC.
+  //
+  // The prior design had the renderer call fs.existsSync/readFileSync itself
+  // via a synchronous IPC round trip. That should have been just as reliable
+  // -- but reported live 2026-08-23, repeatedly: the SAME wallets.json, same
+  // unchanged mtime, same correct content confirmed moments before and after
+  // by a completely independent process, came back "does not exist" for that
+  // one IPC call. Never reproduced on demand, never explained (not a missing
+  // handler, not a registration-order issue, not corruption -- the file was
+  // provably fine before and after). Rather than keep chasing a race that
+  // could be antivirus scanning, Explorer's shell hooks, or something else
+  // entirely, removing the round trip removes the failure mode with it: a
+  // single synchronous fs call made once, from the one process that owns
+  // this window, before the renderer exists to race it at all.
+  let initialWallets = [];
+  let initialLanguage = 'en';
+  try {
+    const wp = walletsFilePath();
+    if (fs.existsSync(wp)) {
+      const parsed = JSON.parse(fs.readFileSync(wp, 'utf8'));
+      if (Array.isArray(parsed)) initialWallets = parsed;
+    }
+    console.log('[launcher] createLauncher: read ' + initialWallets.length +
+      ' wallet(s) directly from ' + wp);
+  } catch (e) {
+    console.error('[launcher] createLauncher: could not read wallets.json: ' + e.message);
+  }
+  try {
+    const settings = readSettings();
+    if (settings && typeof settings.language === 'string') initialLanguage = settings.language;
+  } catch (e) { /* default 'en' stands */ }
+
+  launcherWindow.loadFile('index.html', {
+    query: {
+      initialWallets: JSON.stringify(initialWallets),
+      initialLanguage,
+    },
+  });
 
   launcherWindow.once('ready-to-show', () => {
     // Windows can silently minimize a window created by a process that
@@ -495,10 +536,28 @@ function walletsFilePath() {
 ipcMain.on('wallets:readMirrorSync', (event) => {
   try {
     const p = walletsFilePath();
-    if (!fs.existsSync(p)) { event.returnValue = []; return; }
-    const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
-    event.returnValue = Array.isArray(parsed) ? parsed : [];
-  } catch (e) { event.returnValue = []; }
+    const exists = fs.existsSync(p);
+    if (!exists) {
+      console.warn('[launcher] wallets.json does not exist at ' + p);
+      event.returnValue = [];
+      return;
+    }
+    const raw = fs.readFileSync(p, 'utf8');
+    const parsed = JSON.parse(raw);
+    const result = Array.isArray(parsed) ? parsed : [];
+    // This handler used to swallow every failure silently -- the only code
+    // path in this app with no log at all on error, which is exactly why the
+    // divergence between "file has 2 wallets on disk" and "the running app
+    // read 0" could not be explained from any log. Logging the outcome even
+    // on success now, not just on failure, so a future report is answerable
+    // in one line either way.
+    console.log('[launcher] wallets:readMirrorSync -> ' + result.length +
+      ' wallet(s), raw ' + raw.length + ' bytes from ' + p);
+    event.returnValue = result;
+  } catch (e) {
+    console.error('[launcher] wallets:readMirrorSync FAILED: ' + e.message + ' (path: ' + walletsFilePath() + ')');
+    event.returnValue = [];
+  }
 });
 
 ipcMain.handle('wallets:readMirror', () => {

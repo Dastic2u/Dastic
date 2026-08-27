@@ -306,7 +306,13 @@
 
   <script>
     const { ipcRenderer } = require('electron');
-    const { t, applyTranslations, buildLanguageSelect } = require('./i18n');
+    const { t, applyTranslations, buildLanguageSelect, seedLanguage } = require('./i18n');
+    // Seed from the page's own URL, not an IPC call — same reasoning as the
+    // wallet list just below: launcher.js already read settings.json once,
+    // in the main process, before this page existed.
+    try {
+      seedLanguage(new URLSearchParams(window.location.search).get('initialLanguage'));
+    } catch (e) { /* falls back to English inside i18n.js */ }
 
     window.addEventListener('error', (e) => {
       ipcRenderer.send('renderer-error', { source: 'index.html', message: e.message, stack: e.error?.stack });
@@ -322,37 +328,33 @@
     // surviving a corrupt value instead of throwing — turns "my wallets are
     // gone" into something answerable from a log.
     /**
-     * The plain-file mirror is now AUTHORITATIVE, not a fallback.
+     * The wallet list arrives via the PAGE'S OWN URL, not an IPC call.
      *
-     * localStorage proved unreliable this session: its LevelDB store got its
-     * write-ahead log torn by repeated forced process kills during testing,
-     * and a corrupted LevelDB can hand different windows a different last
-     * -good value from the SAME key — reported live as the wallet list (and
-     * separately the language) coming back different between two launches of
-     * the identical app against the identical profile. A synchronous read of
-     * a small JSON file, written with one fs call, cannot end up in that
-     * state. localStorage is kept only as a same-tick cache so the rest of
-     * this file doesn't need to change, and is overwritten from the file on
-     * every load.
+     * Both localStorage and a synchronous IPC read of the file mirror were
+     * tried here and both proved unreliable across this session:
+     * localStorage's LevelDB store got its write-ahead log torn by repeated
+     * forced process kills during testing, and could hand different windows
+     * a different last-good value from the SAME key. The IPC-based file read
+     * was meant to fix that — but reported live 2026-08-23: the SAME
+     * wallets.json, same unchanged mtime, same correct content confirmed
+     * moments before and after by a completely independent process, came
+     * back "does not exist" for that one synchronous IPC call. Never
+     * reproduced on demand, never explained.
+     *
+     * So the round trip is removed rather than debugged further: launcher.js
+     * (createLauncher()) now reads wallets.json itself, once, in the main
+     * process, BEFORE this page even exists to race it, and passes the
+     * result in through the file:// URL's query string. There is no
+     * “ask and wait for an answer” step left for anything to go wrong on.
      */
     let wallets = [];
     try {
-      const mirrored = ipcRenderer.sendSync('wallets:readMirrorSync');
-      if (Array.isArray(mirrored) && mirrored.length > 0) {
-        wallets = mirrored;
-        console.log('[launcher] wallet list loaded from the file mirror: ' + wallets.length +
-          ' wallet(s) [' + wallets.map(function (w) { return w && w.name; }).join(', ') + ']');
-      } else {
-        // Nothing in the file yet — true first run, or a pre-mirror install.
-        // Fall back to whatever localStorage has, ONE TIME, and the mirror
-        // gets seeded from it below so this branch is never needed again.
-        const rawWallets = localStorage.getItem(STORAGE_KEY);
-        wallets = JSON.parse(rawWallets) || [];
-        if (!Array.isArray(wallets)) wallets = [];
-        console.log('[launcher] file mirror was empty; loaded ' + wallets.length +
-          ' wallet(s) from localStorage instead (raw length ' +
-          (rawWallets === null ? 'null' : rawWallets.length) + ')');
-      }
+      const params = new URLSearchParams(window.location.search);
+      const injected = params.get('initialWallets');
+      wallets = injected ? JSON.parse(injected) : [];
+      if (!Array.isArray(wallets)) wallets = [];
+      console.log('[launcher] wallet list received from the page URL: ' + wallets.length +
+        ' wallet(s) [' + wallets.map(function (w) { return w && w.name; }).join(', ') + ']');
       localStorage.setItem(STORAGE_KEY, JSON.stringify(wallets));
     } catch (e) {
       console.error('[launcher] wallet list could not be loaded — ' +

@@ -666,6 +666,18 @@
     <span class="net-dot" id="netDot"></span><span id="netText">Checking network…</span>
   </div>
 
+  <!-- A separate signal from the read-health pill above. "Reachability of
+       the GraphQL endpoint" (getCurrentBlock succeeding) says nothing about
+       whether tap SUBMISSIONS are actually landing — this app has repeatedly
+       measured reads staying green while root/proof calls get shed by the
+       node's own message queue. Requested twice on instruction, most
+       recently: "most of my taps aren't being accepted... I need something
+       to know how the network is faring [for submission]." Built from real
+       counted outcomes (recordSubmissionOutcome()), not a binary flag. -->
+  <div class="net-status" id="sdkStatus" title="How many of this app's recent tap submissions the chain has actually accepted">
+    <span class="net-dot" id="sdkDot"></span><span id="sdkText">No submissions yet</span>
+  </div>
+
   <!-- Dastic: the character mines the NACKL coin, and the bees are his pets —
        they orbit while he works and settle down when he sleeps. The .miner
        element keeps its id and its mining/sleeping class contract because
@@ -845,7 +857,13 @@
   <div class="controls">
     <button class="btn btn-start" id="startBtn" onclick="startMiningManually()" style="display:none;" data-i18n="mine.start">▶ Start Mining</button>
     <button class="btn btn-stop" id="stopBtn" onclick="stopMining()" style="display:none;" data-i18n="mine.stop">⏹ Stop Mining</button>
-    <button class="btn btn-reconnect" id="reconnectBtn" onclick="reconnectWallet()" data-i18n="connect.reconnect">🔄 Reconnect Wallet</button>
+    <!-- Removed from here on instruction: reconnect should only appear when
+         it's actually necessary, not sit permanently next to Stop. The stall
+         banner above already surfaces its own contextual Reconnect Wallet
+         button once there's a real reason to show one, and the post-halt
+         connect gate has "Scan Again" for the one case that's actually
+         terminal. reconnectWallet() itself is unchanged and still reachable
+         from both of those. -->
   </div>
 
   <div class="settings">
@@ -2132,6 +2150,12 @@
     // ticks down.
     let epochAnchorRemainingMs = null;
     let epochAnchorAt = 0;
+    // Whether the extra "the epoch just rolled over" poll has already fired
+    // for the CURRENT boundary. Reset every time a fresh on-chain read moves
+    // the anchor, so the next boundary gets its own chance to fire — without
+    // this, renderEpoch()'s once-a-second tick would refire it repeatedly for
+    // every second the countdown sits at/near zero.
+    let epochBoundaryPollFired = false;
     let epochTicker = null;
     let netTicker = null;
     let epochPollTimer = null;
@@ -2214,6 +2238,23 @@
       renderWindow();
       const remainingMs = currentEpochRemainingMs();
       if (remainingMs === null) return;
+      // Reported: "sometimes it takes time for the total tap to clear and
+      // reset to 0." Real, and quantifiable — refreshEpochInfo() only polls
+      // every EPOCH_POLL_SLOW_MS (2 minutes) in steady state, so a rollover
+      // landing right after a poll could sit stale on screen for up to that
+      // long before the next scheduled read catches it. This ticker already
+      // knows the predicted boundary to the second (it's what the countdown
+      // itself counts down to), so fire ONE extra targeted read right at that
+      // moment instead of waiting for the generic cadence. epochBoundaryPollFired
+      // stops it from re-firing every second the countdown sits at 0, and gets
+      // re-armed the moment a fresh read moves the anchor to a new boundary.
+      if (remainingMs <= 1500 && !epochBoundaryPollFired) {
+        epochBoundaryPollFired = true;
+        console.log('[BeeEngine] Epoch boundary reached — polling immediately instead of ' +
+          'waiting for the next scheduled read, so the tap counter clears without a delay.');
+        refreshEpochInfo().catch((e) =>
+          console.warn('[BeeEngine] Boundary epoch read failed:', e.message));
+      }
       setEpochDisplay(
         formatCountdown(remainingMs),
         `${EPOCH_BLOCKS_PER_DAY.toLocaleString()} blocks per epoch at ${Math.round(blockMs)}ms per block ` +
@@ -2247,6 +2288,7 @@
         updateNetworkLabel();
       }, 1000);
       renderNetStatus();
+      renderSdkStatus(); // paints its own idle state; updates itself from here on submission events only
     }
 
     // Self-rescheduling rather than setInterval: poll often enough to get
@@ -2407,6 +2449,67 @@
       text.textContent = tapBacklog > 0
         ? `Network stable — catching up ${plannedTapsForBurst()} taps`
         : t('net.stable');
+    }
+
+    /**
+     * A rolling window of real submission verdicts, not a binary flag.
+     *
+     * Session-scoped counters (sessionSubmissions/sessionsAcceptedCount)
+     * reset to 0/0 at the start of every new session, so they can't answer
+     * "how is the network faring right now" — a fresh session always starts
+     * blank regardless of how the last one went. This is deliberately NOT
+     * session-scoped: it survives session boundaries for as long as this
+     * window stays open, which is what "how is submission faring" actually
+     * needs to mean.
+     *
+     * Capped at SUBMISSION_HISTORY_MAX so a long-running window reflects
+     * recent conditions, not a stale average from hours ago.
+     */
+    const SUBMISSION_HISTORY_MAX = 20;
+    const submissionHistory = []; // each entry: 'accepted' | 'congested' | 'refused'
+
+    function recordSubmissionOutcome(kind) {
+      submissionHistory.push(kind);
+      if (submissionHistory.length > SUBMISSION_HISTORY_MAX) submissionHistory.shift();
+      renderSdkStatus();
+    }
+
+    /**
+     * Paint the submission-health pill from real counted outcomes.
+     *
+     * Three states, coloured on the SAME congestion fraction the stall
+     * banner already uses as its trigger point (CONGESTION_STALL_WARNING_COUNT
+     * worth of the visible window), so this pill and that banner never
+     * disagree about what "bad" means — this one just shows the number
+     * instead of waiting for a threshold to cross before saying anything.
+     */
+    function renderSdkStatus() {
+      const box = document.getElementById('sdkStatus');
+      const text = document.getElementById('sdkText');
+      if (!box || !text) return;
+      box.classList.remove('up', 'degraded', 'down');
+      if (submissionHistory.length === 0) {
+        text.textContent = 'No submissions yet';
+        return;
+      }
+      const n = submissionHistory.length;
+      const accepted = submissionHistory.filter((s) => s === 'accepted').length;
+      const congested = submissionHistory.filter((s) => s === 'congested').length;
+      const refused = n - accepted - congested;
+      const congestedPct = Math.round((congested / n) * 100);
+      const acceptedPct = Math.round((accepted / n) * 100);
+      const label = `${accepted}/${n} accepted (${acceptedPct}%)` +
+        (congested > 0 ? ` · ${congested} queue-full` : '') +
+        (refused > 0 ? ` · ${refused} refused` : '') +
+        ` — last ${n}`;
+      if (congestedPct >= 50 || refused > 0) {
+        box.classList.add(refused > 0 ? 'down' : 'degraded');
+      } else if (congestedPct > 0) {
+        box.classList.add('degraded');
+      } else {
+        box.classList.add('up');
+      }
+      text.textContent = label;
     }
 
     function noteNetworkResult(ok) {
@@ -2659,6 +2762,9 @@
         epochAnchorRemainingMs = remainingMs;
         epochAnchorAt = now;
       }
+      // A fresh read means a new boundary to watch for — see the ticker's own
+      // check below for why this needs its own latch.
+      epochBoundaryPollFired = false;
 
       renderEpoch();
       startEpochTicker();
@@ -2872,13 +2978,34 @@
     let consecutiveNotOwnerFailures = 0;
     const NOT_OWNER_HALT_THRESHOLD = 5;
 
-    /** Any successful signed call is proof the key IS the owner — clear the streak. */
+    /**
+     * Any successful signed call is proof the key IS the owner — clear the
+     * streak AND the halt itself.
+     *
+     * Found live 2026-08-27, from the wallet's own log after a genuine
+     * re-pair: 10:01:33 hit the 5th ERR_NOT_OWNER and halted; 10:04:34 logged
+     * "A signed call succeeded — clearing the streak"; 10:04:49, fifteen
+     * seconds later, logged "Mining halted: re-pairing required" again — the
+     * exact halt this function's own doc comment says a successful signed
+     * call disproves. This only ever zeroed consecutiveNotOwnerFailures.
+     * notOwnerRefused (the actual gate startMining() and the connect flow
+     * check) is a SEPARATE one-way latch that nothing here touched, so once
+     * set it stayed set regardless of anything that happened afterward — the
+     * user is left needing to hit Reconnect Wallet by hand even though the
+     * app itself already had the proof it didn't need to.
+     */
     function resetNotOwnerStreak() {
       if (consecutiveNotOwnerFailures > 0) {
         console.log(`[BeeEngine] A signed call succeeded — clearing the ` +
           `${consecutiveNotOwnerFailures}/${NOT_OWNER_HALT_THRESHOLD} ERR_NOT_OWNER streak.`);
       }
       consecutiveNotOwnerFailures = 0;
+      if (notOwnerRefused) {
+        console.log('[BeeEngine] Lifting the re-pair halt — a signed call just succeeded, ' +
+          'which is direct proof this key is the registered owner again.');
+        notOwnerRefused = false;
+        notOwnerDetail = null;
+      }
     }
 
     // Per-worker outcome tracking. A "burst" is one SDK worker, and workers
@@ -3280,6 +3407,40 @@
     // Long enough to let the producer drain, short enough not to waste a
     // meaningful slice of a 5-minute session.
     const CONGESTION_BACKOFF_MS = 6000;
+    // Ceiling for the exponential-with-jitter backoff below — without one,
+    // a wallet stuck in a long losing streak against sustained congestion
+    // would eventually wait longer than it has session time left for.
+    const CONGESTION_BACKOFF_MAX_MS = 20000;
+
+    /**
+     * How long to actually wait after a congestion rejection, given how many
+     * have happened in a row.
+     *
+     * Two problems with a flat CONGESTION_BACKOFF_MS, found by measuring two
+     * wallets mining side by side: their submissions never actually
+     * overlapped in time (confirmed live — the failures were provably
+     * independent), but a fixed delay still has a real cost of its own. Every
+     * wallet that hits congestion waits the exact same 6s, so if the node's
+     * queue is genuinely still full 6s later, every wallet retries into it at
+     * the same moment again — this doesn't cause the ORIGINAL congestion
+     * (mainnet's queue has plenty of other traffic driving that), but it does
+     * make every retry cheaper to be UNLUCKY at, and does nothing to help a
+     * wallet on a losing streak.
+     *
+     * Two changes: (1) jitter, so N wallets backing off at once don't retry
+     * in lockstep — genuinely reduces self-inflicted collision odds, unlike
+     * anything that pretends to reduce the network's own congestion; (2) a
+     * mild exponential ramp keyed on consecutiveCongestionFailures (already
+     * tracked for the stall banner), so a wallet on a real losing streak
+     * backs off further each time instead of hammering the same 6s gap
+     * forever.
+     */
+    function congestionBackoffMs() {
+      const streak = Math.max(1, consecutiveCongestionFailures);
+      const base = Math.min(CONGESTION_BACKOFF_MAX_MS, CONGESTION_BACKOFF_MS * streak);
+      const jitter = base * (0.7 + Math.random() * 0.6); // ±30%
+      return Math.round(Math.min(CONGESTION_BACKOFF_MAX_MS, jitter));
+    }
     // How long a finished session's result stays on screen before the next
     // one starts. The clock hitting 00:00 is the start of the next global tap
     // window, so this has to be short enough to be a rounding error against a
@@ -4674,6 +4835,7 @@
               if (w) w.rejected = true;
               sessionSubmitFailures++;
               lastSubmitFailCongested = congested;
+              recordSubmissionOutcome(congested ? 'congested' : 'refused');
               // Consecutive, not cumulative — an occasional rejection among
               // mostly-successful submissions is normal chain noise and
               // shouldn't bank toward a warning. Reset wherever a submission
@@ -4812,6 +4974,7 @@
             consecutiveCongestionFailures = 0;
             currentBurstDeadlineAt = null;
             hideEngineStallWarning();
+            recordSubmissionOutcome('accepted');
             // A rejection verdict can be overturned. run11 saw
             // submit_session_proof fail and session_accepted arrive for the
             // same worker, and the stuck guard had already written those taps
@@ -5106,11 +5269,12 @@
       // a plain error shouldn't cost throughput.
       if (lastSubmitFailCongested) {
         lastSubmitFailCongested = false;
+        const backoffMs = congestionBackoffMs();
         const remainingMs = sessionDurationMs - (Date.now() - sessionStartTime);
-        if (remainingMs > CONGESTION_BACKOFF_MS + MIN_BURST_MS) {
+        if (remainingMs > backoffMs + MIN_BURST_MS) {
           document.getElementById('timerLabel').textContent =
-            '🌐 Mainnet queue was full — easing off for a few seconds…';
-          scheduleBurst(CONGESTION_BACKOFF_MS, 'mainnet congestion backoff');
+            `🌐 Mainnet queue was full — easing off for ${Math.round(backoffMs / 1000)}s…`;
+          scheduleBurst(backoffMs, `mainnet congestion backoff (streak ${consecutiveCongestionFailures})`);
           return;
         }
       }

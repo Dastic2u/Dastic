@@ -459,6 +459,21 @@ function ipc() {
 }
 
 let cachedLang = null;
+
+/**
+ * Set the in-process language cache directly, bypassing settings:getSync.
+ *
+ * For pages that already received the language another way at load time
+ * (index.html gets it via its own URL query string, read once in the main
+ * process before the page existed to race it) — the same reasoning as the
+ * wallet list. currentLang()'s IPC path stays as-is for anything that
+ * doesn't seed it (miner.html), since no failure has actually been observed
+ * on that path.
+ */
+function seedLanguage(code) {
+  if (STRINGS[code]) cachedLang = code;
+}
+
 function currentLang() {
   if (cachedLang !== null) return cachedLang;
   try {
@@ -529,5 +544,5 @@ function buildLanguageSelect(selectEl, onChange) {
 }
 
 module.exports = {
-  LANGUAGES, STRINGS, t, currentLang, setLang, applyTranslations, buildLanguageSelect,
+  LANGUAGES, STRINGS, t, currentLang, setLang, seedLanguage, applyTranslations, buildLanguageSelect,
 };
