@@ -263,9 +263,22 @@ function createLauncher() {
   } else if (walletsRead.fresh) {
     console.log('[launcher] createLauncher: no wallets.json yet — new profile.');
   } else {
-    walletsUnreadable = true;
-    console.error('[launcher] createLauncher: wallets.json unreadable — showing an ' +
-      'error state rather than an empty list, because the wallets are probably fine.');
+    // Both the mirror and its backup are unreadable. Before telling the user
+    // anything, rebuild the list from the pairing files — they carry the
+    // wallet names and are almost never mid-write.
+    const salvaged = recoverWalletsFromPairingFiles();
+    if (salvaged.length > 0) {
+      initialWallets = salvaged;
+      console.error('[launcher] createLauncher: wallets.json AND its backup were both ' +
+        'unreadable — rebuilt ' + salvaged.length + ' wallet(s) from the pairing files [' +
+        salvaged.map((w) => w.name).join(', ') + ']. Counters start at zero; the miner ' +
+        're-reads balance from chain.');
+    } else {
+      walletsUnreadable = true;
+      console.error('[launcher] createLauncher: wallets.json unreadable and nothing to ' +
+        'rebuild from — showing an error state rather than an empty list, because the ' +
+        'wallets are probably fine.');
+    }
   }
   try {
     const settings = readSettings();
@@ -575,7 +588,9 @@ ipcMain.on('wallets:readMirrorSync', (event) => {
 ipcMain.handle('wallets:readMirror', () => {
   try {
     const read = readJsonResilient(walletsFilePath(), 'wallets:readMirror');
-    if (!read.ok) return [];
+    // Same last resort as createLauncher, so the launcher's "Try again"
+    // button can rescue the list too rather than just failing again.
+    if (!read.ok) return recoverWalletsFromPairingFiles();
     return Array.isArray(read.value) ? read.value : [];
   } catch (e) {
     console.warn('[launcher] Could not read the wallet mirror:', e.message);
@@ -630,6 +645,47 @@ ipcMain.handle('wallets:clearMirror', () => {
 function pairingFilePath(walletName) {
   const safe = String(walletName || '').replace(/[^a-zA-Z0-9_-]/g, '_');
   return path.join(app.getPath('userData'), `pairing_${safe}.json`);
+}
+
+/**
+ * Last-resort wallet-list recovery, from the per-wallet pairing files.
+ *
+ * Added 2026-08-29 after wallets.json AND wallets.json.bak were both
+ * unreadable at the same moment — while pairing_martins.json and
+ * pairing_rahmita.json sat there perfectly intact. The wallet NAME is in the
+ * filename, so the list was fully recoverable and the app told the user it
+ * had nothing anyway.
+ *
+ * These files are the better source precisely because they are boring: they
+ * are written only when a wallet is paired, not on every status tick, so they
+ * are almost never mid-write when something goes wrong. Counters come back as
+ * zero and the balance as a placeholder — the miner re-reads both from chain
+ * within seconds of opening, and a stale zero is infinitely better than an
+ * empty launcher.
+ */
+function recoverWalletsFromPairingFiles() {
+  try {
+    const dir = app.getPath('userData');
+    const recovered = [];
+    for (const entry of fs.readdirSync(dir)) {
+      const m = /^pairing_(.+)\.json$/.exec(entry);
+      if (!m) continue; // skips the .bak and .tmp siblings by construction
+      const read = readJsonResilient(path.join(dir, entry), 'recover ' + entry);
+      if (!read.ok || !read.value || !read.value.miningKeys) continue;
+      recovered.push({
+        name: read.value.anWalletName || m[1],
+        sessions: 0,
+        taps: 0,
+        balance: '—',
+        isMining: false,
+        history: [],
+      });
+    }
+    return recovered;
+  } catch (e) {
+    console.warn('[launcher] pairing-file recovery failed: ' + e.message);
+    return [];
+  }
 }
 
 ipcMain.on('pairing:readSync', (event, walletName) => {

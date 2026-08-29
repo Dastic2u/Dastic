@@ -385,13 +385,62 @@
       wallets = [];
     }
 
-    function saveWallets() {
+    /**
+     * Mirror writes are COALESCED. Do not make this write on every call.
+     *
+     * `wallet-update` arrives on every miner status tick — roughly twice a
+     * second with two wallets mining — and each one used to rewrite
+     * wallets.json. With atomic writes that is a read, a full file copy to
+     * .bak, a write, an fsync and a rename, twice a second, forever, on a
+     * machine that mines all day. Three things wrong with that: pointless SSD
+     * wear, a synchronous disk flush on the UI thread, and — the one that bit
+     * us — the file is left permanently mid-write, which is the widest
+     * possible window for a killed process to leave a stale or incoherent
+     * view behind. Caught 2026-08-29: a read returned 280 characters from a
+     * 272-byte file, which is not something a healthy read can do.
+     *
+     * The mirror is a safety net, not telemetry. Balances and tap counts do
+     * not need to be durable to the millisecond; losing ten seconds of a
+     * counter costs nothing, and the live values are on screen anyway.
+     * Structural changes — adding, deleting, starting or stopping a wallet —
+     * pass {immediate:true} because those are user intent and are rare.
+     */
+    const MIRROR_COALESCE_MS = 10000;
+    let mirrorTimer = null;
+    let lastMirrorJson = null;
+
+    function writeMirrorNow() {
+      const json = JSON.stringify(wallets);
+      // Nothing changed since the last write — skip the disk entirely.
+      if (json === lastMirrorJson) return;
+      if (!Array.isArray(wallets) || wallets.length === 0) return;
+      lastMirrorJson = json;
+      ipcRenderer.invoke('wallets:writeMirror', wallets).catch(() => {});
+    }
+
+    function saveWallets(options) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(wallets));
       // Mirror to a plain file too. See the mirror's comment in launcher.js:
       // localStorage reads back EMPTY when the Chromium profile is locked or
       // replaced, which looks exactly like having no wallets.
-      ipcRenderer.invoke('wallets:writeMirror', wallets).catch(() => {});
+      if (options && options.immediate) {
+        if (mirrorTimer) { clearTimeout(mirrorTimer); mirrorTimer = null; }
+        writeMirrorNow();
+        return;
+      }
+      if (mirrorTimer) return;
+      mirrorTimer = setTimeout(() => {
+        mirrorTimer = null;
+        writeMirrorNow();
+      }, MIRROR_COALESCE_MS);
     }
+
+    // Flush whatever is pending on the way out, so a clean close does not
+    // discard the last few seconds of counters.
+    window.addEventListener('beforeunload', () => {
+      if (mirrorTimer) { clearTimeout(mirrorTimer); mirrorTimer = null; }
+      writeMirrorNow();
+    });
 
     /**
      * Restore from the file mirror when localStorage came up empty.
@@ -554,7 +603,7 @@
       const w = wallets.find(w => w.name === name);
       if (w) {
         w.isMining = false;
-        saveWallets();
+        saveWallets({ immediate: true });
         renderWallets();
       }
     }
@@ -564,7 +613,7 @@
       wallets = wallets.filter(w => w.name !== name);
       // An explicit deletion is the one case where an empty list is genuine.
       if (wallets.length === 0) ipcRenderer.invoke('wallets:clearMirror').catch(() => {});
-      saveWallets();
+      saveWallets({ immediate: true });
       renderWallets();
     }
 
@@ -577,7 +626,7 @@
         return;
       }
       wallets.push({ name, sessions: 0, taps: 0, balance: 0, isMining: false, history: [] });
-      saveWallets();
+      saveWallets({ immediate: true });
       input.value = '';
       renderWallets();
     }
