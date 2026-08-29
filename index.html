@@ -348,14 +348,37 @@
      * “ask and wait for an answer” step left for anything to go wrong on.
      */
     let wallets = [];
+    // Set when the main process could not read wallets.json at all. It is NOT
+    // the same as "there are no wallets", and the difference matters twice
+    // below: we must not overwrite the working copy with nothing, and the
+    // screen must not offer the cheerful "add your first wallet" empty state
+    // to someone whose two wallets are sitting intact on disk.
+    let walletsUnreadable = false;
     try {
       const params = new URLSearchParams(window.location.search);
+      walletsUnreadable = params.get('walletsUnreadable') === '1';
       const injected = params.get('initialWallets');
       wallets = injected ? JSON.parse(injected) : [];
       if (!Array.isArray(wallets)) wallets = [];
       console.log('[launcher] wallet list received from the page URL: ' + wallets.length +
-        ' wallet(s) [' + wallets.map(function (w) { return w && w.name; }).join(', ') + ']');
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(wallets));
+        ' wallet(s) [' + wallets.map(function (w) { return w && w.name; }).join(', ') + ']' +
+        (walletsUnreadable ? ' (READ FAILED — this empty list is not the truth)' : ''));
+
+      if (walletsUnreadable) {
+        // Fall back to the working copy instead of erasing it. Writing the
+        // empty list through here is how one unreadable file turned into a
+        // launcher with nothing in it AND a wiped localStorage — the read
+        // failure propagating into the one other place the list still lived.
+        const cached = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        if (Array.isArray(cached) && cached.length > 0) {
+          wallets = cached;
+          walletsUnreadable = false;
+          console.warn('[launcher] wallets.json was unreadable, but localStorage still ' +
+            'had ' + cached.length + ' wallet(s) — using those.');
+        }
+      } else {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(wallets));
+      }
     } catch (e) {
       console.error('[launcher] wallet list could not be loaded — ' +
         'starting empty rather than crashing the launcher:', e.message);
@@ -384,6 +407,7 @@
         const mirrored = await ipcRenderer.invoke('wallets:readMirror');
         if (!Array.isArray(mirrored) || mirrored.length === 0) return;
         wallets = mirrored;
+        walletsUnreadable = false;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(wallets));
         console.warn('[launcher] localStorage held no wallets but the file mirror had ' +
           mirrored.length + ' — restored [' + mirrored.map(function (w) { return w && w.name; }).join(', ') +
@@ -392,6 +416,34 @@
       } catch (e) {
         console.warn('[launcher] Could not consult the wallet mirror:', e.message);
       }
+    }
+
+    /**
+     * Re-read the mirror on demand, behind the "Try again" button.
+     *
+     * The failure this recovers from is transient — today's unreadable file
+     * read back perfectly minutes later from another process — so a retry the
+     * user can press is worth far more than another restart. The main-process
+     * read already retries five times and falls back to wallets.json.bak
+     * before it ever reports failure, so pressing this is a genuinely fresh
+     * attempt rather than a repeat of the same one.
+     */
+    async function retryWalletRead() {
+      try {
+        const mirrored = await ipcRenderer.invoke('wallets:readMirror');
+        if (Array.isArray(mirrored) && mirrored.length > 0) {
+          wallets = mirrored;
+          walletsUnreadable = false;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(wallets));
+          console.warn('[launcher] Retry succeeded — recovered ' + mirrored.length +
+            ' wallet(s). The earlier failure was a transient read, not lost data.');
+        } else {
+          console.warn('[launcher] Retry still could not read the wallet list.');
+        }
+      } catch (e) {
+        console.warn('[launcher] Retry failed:', e.message);
+      }
+      renderWallets();
     }
 
     // Static markup first, then the picker. renderWallets() is re-run on
@@ -406,6 +458,34 @@
     function renderWallets() {
       const list = document.getElementById('walletList');
       list.innerHTML = '';
+
+      // "We could not read your wallets" and "you have no wallets" look
+      // identical on screen unless we deliberately separate them, and showing
+      // the wrong one is the whole reason a transient read failure read as
+      // data loss. Left in English on purpose: this is a rare diagnostic
+      // state where a mistranslated "your wallets are safe" would do real
+      // harm, and the wording has to be exact.
+      if (wallets.length === 0 && walletsUnreadable) {
+        list.innerHTML = `
+          <div style="text-align:center; color:#666; padding: 26px 14px;">
+            <div style="font-size:2rem; margin-bottom:8px;">⚠️</div>
+            <div style="font-size:0.95rem; color:#b45309; font-weight:600;">
+              Couldn't read your wallet list
+            </div>
+            <div style="font-size:0.82rem; margin-top:8px; line-height:1.5;">
+              This is a temporary problem reading the file — <strong>your wallets have
+              not been deleted</strong> and nothing has been changed on disk.
+              This usually follows an unexpected shutdown.
+            </div>
+            <button id="retryWalletRead" style="margin-top:14px; padding:8px 18px;
+              font-size:0.85rem; cursor:pointer; border-radius:6px;
+              border:1px solid #d1d5db; background:#fff;">Try again</button>
+          </div>
+        `;
+        const retry = document.getElementById('retryWalletRead');
+        if (retry) retry.onclick = retryWalletRead;
+        return;
+      }
 
       if (wallets.length === 0) {
         list.innerHTML = `
@@ -563,6 +643,12 @@
     // when it was the source in the first place).
     if (wallets.length > 0) {
       ipcRenderer.invoke('wallets:writeMirror', wallets).catch(() => {});
+    } else {
+      // Last line of defence, and it was never actually wired up: this was
+      // defined but never called, so the "localStorage came up empty but the
+      // mirror has entries" recovery had never once run in practice. It is
+      // the exact case the mirror exists for, so call it.
+      restoreFromMirrorIfEmpty();
     }
   </script>
 </body>

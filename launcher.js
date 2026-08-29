@@ -249,16 +249,23 @@ function createLauncher() {
   // this window, before the renderer exists to race it at all.
   let initialWallets = [];
   let initialLanguage = 'en';
-  try {
-    const wp = walletsFilePath();
-    if (fs.existsSync(wp)) {
-      const parsed = JSON.parse(fs.readFileSync(wp, 'utf8'));
-      if (Array.isArray(parsed)) initialWallets = parsed;
-    }
+  // walletsUnreadable is passed to the page so it can say "couldn't read your
+  // wallets" instead of rendering the empty-state "add your first wallet".
+  // Those two are completely different situations and showing the wrong one
+  // is what made a transient read failure look like the wallets were gone.
+  let walletsUnreadable = false;
+  const wp = walletsFilePath();
+  const walletsRead = readJsonResilient(wp, 'createLauncher wallets.json');
+  if (walletsRead.ok && Array.isArray(walletsRead.value)) {
+    initialWallets = walletsRead.value;
     console.log('[launcher] createLauncher: read ' + initialWallets.length +
-      ' wallet(s) directly from ' + wp);
-  } catch (e) {
-    console.error('[launcher] createLauncher: could not read wallets.json: ' + e.message);
+      ' wallet(s) from ' + wp + (walletsRead.recovered ? ' (via backup)' : ''));
+  } else if (walletsRead.fresh) {
+    console.log('[launcher] createLauncher: no wallets.json yet — new profile.');
+  } else {
+    walletsUnreadable = true;
+    console.error('[launcher] createLauncher: wallets.json unreadable — showing an ' +
+      'error state rather than an empty list, because the wallets are probably fine.');
   }
   try {
     const settings = readSettings();
@@ -269,6 +276,7 @@ function createLauncher() {
     query: {
       initialWallets: JSON.stringify(initialWallets),
       initialLanguage,
+      walletsUnreadable: walletsUnreadable ? '1' : '',
     },
   });
 
@@ -526,6 +534,10 @@ none of ${allWallets.length} wallet${allWallets.length === 1 ? '' : 's'} mining`
  * safety net: written on every change, and read back only when localStorage
  * comes up empty while the mirror has entries.
  */
+// The resilient read/write layer these mirrors depend on. See json-mirror.js
+// for why a single fs call is not trusted on this machine.
+const { readJsonResilient, writeJsonAtomic } = require('./json-mirror');
+
 function walletsFilePath() {
   return path.join(app.getPath('userData'), 'wallets.json');
 }
@@ -536,15 +548,15 @@ function walletsFilePath() {
 ipcMain.on('wallets:readMirrorSync', (event) => {
   try {
     const p = walletsFilePath();
-    const exists = fs.existsSync(p);
-    if (!exists) {
-      console.warn('[launcher] wallets.json does not exist at ' + p);
+    const read = readJsonResilient(p, 'wallets:readMirrorSync');
+    if (!read.ok) {
+      // Genuinely absent on a fresh profile is fine and silent-ish; anything
+      // else has already been logged loudly by readJsonResilient.
+      if (read.fresh) console.warn('[launcher] wallets.json does not exist at ' + p);
       event.returnValue = [];
       return;
     }
-    const raw = fs.readFileSync(p, 'utf8');
-    const parsed = JSON.parse(raw);
-    const result = Array.isArray(parsed) ? parsed : [];
+    const result = Array.isArray(read.value) ? read.value : [];
     // This handler used to swallow every failure silently -- the only code
     // path in this app with no log at all on error, which is exactly why the
     // divergence between "file has 2 wallets on disk" and "the running app
@@ -552,7 +564,7 @@ ipcMain.on('wallets:readMirrorSync', (event) => {
     // on success now, not just on failure, so a future report is answerable
     // in one line either way.
     console.log('[launcher] wallets:readMirrorSync -> ' + result.length +
-      ' wallet(s), raw ' + raw.length + ' bytes from ' + p);
+      ' wallet(s) from ' + p + (read.recovered ? ' (via backup)' : ''));
     event.returnValue = result;
   } catch (e) {
     console.error('[launcher] wallets:readMirrorSync FAILED: ' + e.message + ' (path: ' + walletsFilePath() + ')');
@@ -562,10 +574,9 @@ ipcMain.on('wallets:readMirrorSync', (event) => {
 
 ipcMain.handle('wallets:readMirror', () => {
   try {
-    const p = walletsFilePath();
-    if (!fs.existsSync(p)) return [];
-    const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
-    return Array.isArray(parsed) ? parsed : [];
+    const read = readJsonResilient(walletsFilePath(), 'wallets:readMirror');
+    if (!read.ok) return [];
+    return Array.isArray(read.value) ? read.value : [];
   } catch (e) {
     console.warn('[launcher] Could not read the wallet mirror:', e.message);
     return [];
@@ -581,7 +592,7 @@ ipcMain.handle('wallets:writeMirror', (event, list) => {
     // that case. Deleting the last wallet on purpose is handled by
     // wallets:clearMirror below, which is explicit about it.
     if (list.length === 0) return false;
-    fs.writeFileSync(walletsFilePath(), JSON.stringify(list, null, 2));
+    writeJsonAtomic(walletsFilePath(), list);
     return true;
   } catch (e) {
     console.warn('[launcher] Could not write the wallet mirror:', e.message);
@@ -590,7 +601,10 @@ ipcMain.handle('wallets:writeMirror', (event, list) => {
 });
 
 ipcMain.handle('wallets:clearMirror', () => {
-  try { fs.writeFileSync(walletsFilePath(), '[]'); return true; }
+  // Deliberate, explicit removal of the last wallet — the one case where an
+  // empty list is the truth rather than a failed read. Atomic like the rest,
+  // and it still leaves the previous content in .bak.
+  try { writeJsonAtomic(walletsFilePath(), []); return true; }
   catch (e) { return false; }
 });
 
@@ -621,13 +635,18 @@ function pairingFilePath(walletName) {
 ipcMain.on('pairing:readSync', (event, walletName) => {
   try {
     const p = pairingFilePath(walletName);
-    if (!fs.existsSync(p)) {
+    const read = readJsonResilient(p, `pairing:readSync(${walletName})`);
+    if (!read.ok) {
+      // Returning null here sends an already-paired wallet back to the "Connect
+      // to Acki Nacki Mainnet" QR screen, so it must mean "this wallet has
+      // genuinely never been paired" and nothing else. readJsonResilient has
+      // already retried and tried the backup before we get here.
       event.returnValue = null;
       return;
     }
-    const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+    const parsed = read.value;
     console.log(`[launcher] pairing:readSync(${walletName}) -> found, keys present=` +
-      `${!!(parsed && parsed.miningKeys)}`);
+      `${!!(parsed && parsed.miningKeys)}${read.recovered ? ' (via backup)' : ''}`);
     event.returnValue = parsed;
   } catch (e) {
     console.error(`[launcher] pairing:readSync(${walletName}) FAILED: ${e.message}`);
@@ -638,7 +657,7 @@ ipcMain.on('pairing:readSync', (event, walletName) => {
 ipcMain.handle('pairing:write', (event, walletName, data) => {
   try {
     if (!walletName || !data) return false;
-    fs.writeFileSync(pairingFilePath(walletName), JSON.stringify(data, null, 2));
+    writeJsonAtomic(pairingFilePath(walletName), data);
     return true;
   } catch (e) {
     console.warn(`[launcher] pairing:write(${walletName}) failed: ${e.message}`);
@@ -664,10 +683,9 @@ function settingsFilePath() {
 }
 function readSettings() {
   try {
-    const p = settingsFilePath();
-    if (!fs.existsSync(p)) return {};
-    const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
-    return (parsed && typeof parsed === 'object') ? parsed : {};
+    const read = readJsonResilient(settingsFilePath(), 'settings.json');
+    if (!read.ok) return {};
+    return (read.value && typeof read.value === 'object') ? read.value : {};
   } catch (e) { return {}; }
 }
 ipcMain.on('settings:getSync', (event) => {
@@ -677,7 +695,7 @@ ipcMain.handle('settings:set', (event, key, value) => {
   try {
     const s = readSettings();
     s[key] = value;
-    fs.writeFileSync(settingsFilePath(), JSON.stringify(s, null, 2));
+    writeJsonAtomic(settingsFilePath(), s);
     return true;
   } catch (e) {
     console.warn('[launcher] Could not write settings:', e.message);
